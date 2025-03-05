@@ -57,7 +57,14 @@ if (fs.existsSync(staticPath)) {
   app.use(express.static(staticPath));
 }
 
-db();
+// Update the db connection with proper error handling
+try {
+  db();
+  console.log('Database connected successfully');
+} catch (error) {
+  console.error('Database connection error:', error);
+  // Continue server startup even if DB fails
+}
 
 // API Routes
 app.use('/api', router);
