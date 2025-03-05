@@ -47,7 +47,7 @@ app.use((req, res, next) => {
 });
 app.options('*', cors());
 
-// If using Express's built-in JSON parser (for Express 4.16+)
+// If using Express's built-in JSON parser (for Express 4.1
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
