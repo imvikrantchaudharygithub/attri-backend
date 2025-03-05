@@ -18,35 +18,29 @@ const PORT = process.env.PORT || 3000;
 // Update CORS configuration
 const allowedOrigins = [
   'http://localhost:3001', // Local development
-  'https://your-frontend-domain.com', // Production frontend
+  'http://172.20.10.5:3001',
+  // 'https://your-frontend-domain.com', // Production frontend
   'https://*.vercel.app' // All Vercel preview deployments
 ];
 
-const corsOptions: cors.CorsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, Postman)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.some(allowedOrigin => 
-      origin === allowedOrigin || 
-      origin.endsWith('.vercel.app')
-    )) {
+app.use(cors({
+  origin: function (origin:any, callback) {
+    // Check if the incoming origin is in the allowed origins array
+    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-xsrf-token'],
-  credentials: true,
-  optionsSuccessStatus: 200
-};
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true 
+}));
+app.get('/', (req, res) => {
+  res.send('Hello, world! to gamingadda.com (apis)');
+});
 
-// Must be the first middleware
-app.use(cors(corsOptions));
-
-// Handle preflight requests globally
-app.options('*', cors(corsOptions));
+app.options('*', cors());
 
 // If using Express's built-in JSON parser (for Express 4.16+)
 app.use(express.json({ limit: "50mb" }));
