@@ -1,5 +1,5 @@
 'use strict';
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import bodyParser from 'body-parser';
 import * as dotenv from 'dotenv';
 import cors from 'cors';
@@ -16,32 +16,35 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Update CORS configuration
+// In your backend code
 const allowedOrigins = [
-  'http://localhost:3000', // Frontend typically runs on 3000
+  'http://localhost:3000',
   'http://172.20.10.5:3000',
-  'http://localhost:3001', // Local development
-  'http://172.20.10.5:3001',
-  // 'https://your-frontend-domain.com', // Production frontend
-  'https://*.vercel.app' // All Vercel preview deployments
+  'https://attri-frontend.vercel.app', // Add your frontend domain
+  /https:\/\/.*\.vercel\.app$/  // Allow all Vercel subdomains
 ];
 
-app.use(cors({
-  origin: function (origin:any, callback) {
-    // Check if the incoming origin is in the allowed origins array
-    if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true 
-}));
-app.get('/', (req, res) => {
-  res.send('Hello, world! to gamingadda.com (apis)');
+app.use((req, res, next) => {
+  const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001'];
+  const origin = req.headers.origin;
+  
+  if (origin && allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  }
+  
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+  
+  next();
 });
-
 app.options('*', cors());
 
 // If using Express's built-in JSON parser (for Express 4.16+)
