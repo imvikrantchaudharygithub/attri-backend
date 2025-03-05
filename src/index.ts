@@ -15,27 +15,38 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-const corsOptions = {
-  origin: [
-    'http://localhost:3001', 
-    'http://172.20.10.5:3001',
-    'https://your-production-domain.com'
-  ],
+// Update CORS configuration
+const allowedOrigins = [
+  'http://localhost:3001', // Local development
+  'https://your-frontend-domain.com', // Production frontend
+  'https://*.vercel.app' // All Vercel preview deployments
+];
+
+const corsOptions: cors.CorsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.some(allowedOrigin => 
+      origin === allowedOrigin || 
+      origin.endsWith('.vercel.app')
+    )) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'X-XSRF-TOKEN'
-  ],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-xsrf-token'],
   credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 200
 };
 
+// Must be the first middleware
 app.use(cors(corsOptions));
-app.options('*', cors(corsOptions)); // Enable pre-flight
+
+// Handle preflight requests globally
+app.options('*', cors(corsOptions));
 
 // If using Express's built-in JSON parser (for Express 4.16+)
 app.use(express.json({ limit: "50mb" }));

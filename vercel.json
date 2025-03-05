@@ -1,18 +1,13 @@
 {
   "version": 2,
-  "builds": [
+  "public": false,
+  "headers": [
     {
-      "src": "src/index.ts",
-      "use": "@vercel/node",
-      "config": {
-        "includeFiles": ["src/**/*.ts", "package.json", "tsconfig.json"]
-      }
-    }
-  ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "src/index.ts"
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET,POST,PUT,DELETE" }
+      ]
     }
   ]
 }
