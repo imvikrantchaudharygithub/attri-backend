@@ -17,9 +17,18 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 const corsOptions = {
-  origin: 'http://localhost:3001',
+  origin: [
+    'http://localhost:3000', 
+    'http://172.20.10.5:3000',
+    'https://your-production-domain.com'
+  ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'X-XSRF-TOKEN'
+  ],
   credentials: true,
   preflightContinue: false,
   optionsSuccessStatus: 204
