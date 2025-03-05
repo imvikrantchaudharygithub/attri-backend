@@ -17,6 +17,8 @@ const PORT = process.env.PORT || 3000;
 
 // Update CORS configuration
 const allowedOrigins = [
+  'http://localhost:3000', // Frontend typically runs on 3000
+  'http://172.20.10.5:3000',
   'http://localhost:3001', // Local development
   'http://172.20.10.5:3001',
   // 'https://your-frontend-domain.com', // Production frontend
