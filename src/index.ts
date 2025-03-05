@@ -18,8 +18,8 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 const corsOptions = {
   origin: [
-    'http://localhost:3000', 
-    'http://172.20.10.5:3000',
+    'http://localhost:3001', 
+    'http://172.20.10.5:3001',
     'https://your-production-domain.com'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
