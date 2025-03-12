@@ -11,32 +11,35 @@ interface IOrderProduct {
   priceAtPurchase: number;
 }
 
-interface IPayment {
-  method: string;
-  status: string;
-  transactionId?: string;
-}
+// interface IPayment {
+//   method: string;
+//   status: string;
+//   transactionId?: string;
+// }
 
 // Create new order
 export const createOrder = async (req: Request, res: Response) => {
   try {
-    const { user, address, products, payment, notes } = req.body;
+    const { user, address, products, notes } = req.body;
 
     // Validate required fields
-    if (!user || !address || !products || !payment?.method) {
-      return res.status(400).json({ message: 'Missing required fields' });
+    if (!user || !address || !products ) {
+      res.status(400).json({ message: 'Missing required fields' });
+      return 
     }
 
     // Check if user exists
     const userExists = await User.findById(user);
     if (!userExists) {
-      return res.status(404).json({ message: 'User not found' });
+      res.status(404).json({ message: 'User not found' });
+      return 
     }
 
     // Check if address exists
     const addressExists = await Address.findById(address);
     if (!addressExists) {
-      return res.status(404).json({ message: 'Address not found' });
+      res.status(404).json({ message: 'Address not found' });
+      return 
     }
 
     // Validate products
@@ -46,7 +49,8 @@ export const createOrder = async (req: Request, res: Response) => {
     for (const item of products as IOrderProduct[]) {
       const product:any = await Product.findById(item.product);
       if (!product) {
-        return res.status(404).json({ message: `Product ${item.product} not found` });
+        res.status(404).json({ message: `Product ${item.product} not found` });
+        return 
       }
       
       productItems.push({
@@ -63,11 +67,6 @@ export const createOrder = async (req: Request, res: Response) => {
       user,
       address,
       products: productItems,
-      payment: {
-        method: payment.method,
-        status: payment.status || 'pending',
-        transactionId: payment.transactionId
-      },
       totalAmount,
       notes: notes || '',
       status: 'pending'
@@ -101,12 +100,13 @@ export const getAllOrders = async (req: Request, res: Response) => {
 export const getOrderById = async (req: Request, res: Response) => {
   try {
     const order = await Order.findById(req.params.id)
-      .populate('user', 'name email phone')
+      .populate('user', 'name email phone referral_code')
       .populate('address')
       .populate('products.product');
 
     if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
+      res.status(404).json({ message: 'Order not found' });
+      return 
     }
     
     res.json(order);
@@ -123,7 +123,8 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     const validStatuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
 
     if (!status || !validStatuses.includes(status)) {
-      return res.status(400).json({ message: 'Invalid status value' });
+      res.status(400).json({ message: 'Invalid status value' });
+      return 
     }
 
     const order = await Order.findByIdAndUpdate(
@@ -133,7 +134,8 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     );
 
     if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
+      res.status(404).json({ message: 'Order not found' });
+      return 
     }
 
     res.json(order);
@@ -149,12 +151,29 @@ export const deleteOrder = async (req: Request, res: Response) => {
     const order = await Order.findByIdAndDelete(req.params.id);
 
     if (!order) {
-      return res.status(404).json({ message: 'Order not found' });
+        res.status(404).json({ message: 'Order not found' });
+      return 
     }
 
     res.json({ message: 'Order deleted successfully' });
   } catch (error) {
     console.error('Error deleting order:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const getUserOrders = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userId } = req.params;
+    
+    const orders = await Order.find({ user: userId })
+      .populate('user', 'name email')
+      .populate('address')
+      .populate('products.product', 'name price images mrp discount');
+      
+    res.json(orders);
+  } catch (error) {
+    console.error('Error fetching user orders:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

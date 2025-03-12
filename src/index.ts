@@ -7,7 +7,7 @@ import db from './db/db'; // Assuming you have a `db.ts` file in the `db` folder
 import router from './routes/routes'; // Assuming you have a `router.ts` file in the `routes` folder
 import path from 'path';
 import fs from 'fs';
-
+import { sendSMS } from './services/smsSevice';
 // Load environment variables from .env file
 dotenv.config();
 
@@ -73,7 +73,11 @@ app.use('/api', router);
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello, World!');
 });
-
+// sendSMS("9520887693", '123456').then((response) => {
+//   console.log(response);
+// }).catch((error) => {
+//   console.log(error);
+// });
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);

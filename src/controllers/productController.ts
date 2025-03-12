@@ -19,13 +19,14 @@ type UploadFiles = {
 
 
 export const createProduct = async (req: Request, res: Response): Promise<void> => {
-    const { name, description, mrp, discount, stock, category, status, gallery, faqs, ingredients, info } = req.body;
+    const { name, description, mrp, discount, stock, category, status, gallery, faqs, ingredients, info, tags } = req.body;
 
-    // Parse gallery and faqs if they're strings
+    // Parse gallery, faqs, and tags if they're strings
     const parsedGallery = typeof gallery === "string" ? JSON.parse(gallery) : [];
     const parsedFaqs = typeof faqs === "string" ? JSON.parse(faqs) : faqs || [];
     const parsedIngredients = typeof ingredients === "string" ? JSON.parse(ingredients) : ingredients || [];
     const parsedInfo = typeof info === "string" ? JSON.parse(info) : info || [];
+    const parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags || [];
 
     // Validate FAQs structure
     if (parsedFaqs && !Array.isArray(parsedFaqs)) {
@@ -154,7 +155,8 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
             ingredients: ingredientsData,
             status,
             faqs: validatedFaqs,
-            info: validatedInfo
+            info: validatedInfo,
+            tags: parsedTags
         });
 
         const savedProduct = await newProduct.save();

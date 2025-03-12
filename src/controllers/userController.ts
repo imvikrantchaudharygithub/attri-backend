@@ -6,10 +6,13 @@ import crypto from 'crypto';
 import mongoose, { Schema } from 'mongoose';
 import { uploadCloudinary } from '../services/cloudinaryService';
 import cloudinary from '../config/cloudinary';
-
+import dotenv from 'dotenv';
+import jwt from 'jsonwebtoken';
+dotenv.config();
+const secretKey :any = process.env.SECRET_KEY;
 // Generate OTP and send to the user
 export const loginWithOTP = async (req: Request, res: Response): Promise<void> => {
-  const { phone } = req.body;
+  const { phone ,newuser} = req.body;
 
   if (!phone) {
     res.status(400).json({ message: 'Phone number is required' });
@@ -19,14 +22,20 @@ export const loginWithOTP = async (req: Request, res: Response): Promise<void> =
   try {
     // Check if user exists
     const existingUser = await User.findOne({ phone });
-    
-    if (!existingUser) {
-      res.status(403).json({ message: 'Please register first before logging in' });
-      return;
+    if(newuser==true){
+      if(existingUser){
+        res.status(403).json({ message: 'User already exists' });
+        return;
+      }
+    }else if(newuser==false){
+      if (!existingUser) {
+        res.status(403).json({ message: 'Please register first before logging in' });
+        return;
+      }
     }
 
     // Generate and send OTP (using your preferred service) 
-    const otp = crypto.randomInt(100000, 999999).toString();
+    const otp = crypto.randomInt(1000, 9999).toString();
 
     await storeOtp(phone, otp);
     res.status(200).json({ message: `OTP=${otp} sent successfully` });
@@ -37,92 +46,144 @@ export const loginWithOTP = async (req: Request, res: Response): Promise<void> =
   }
 };
 
+// Verify OTP for user login
+export const verifyLoginOtp = async (req: Request, res: Response): Promise<void> => {
+  let token:any;
+  const { phone, otp } = req.body;
+
+  if (!phone || !otp) {
+    res.status(400).json({ message: 'Phone and OTP are required' });
+    return;
+  }
+
+  try {
+    // Verify OTP
+    const isVerified = await verifyOtp(phone, otp);
+    
+    if (!isVerified) {
+      res.status(400).json({ message: 'Invalid OTP' });
+      return;
+    }
+
+    // Find the user
+    const user = await User.findOne({ phone });
+    
+    if (!user) {
+      res.status(404).json({ message: 'User not found. Please signup first' });
+      return;
+    }
+    if (secretKey) {
+      token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '168h' });
+     } else {
+         res.status(500).json({ message: "Internal server error: Secret key not defined" });
+     }
+
+    // Login successful
+    res.status(200).json({ 
+      message: 'Login successful', 
+      user ,
+      token
+    });
+    
+  } catch (error) {
+    console.error('Error verifying login OTP:', error);
+    res.status(500).json({ message: 'Failed to verify OTP', error });
+    return;
+  }
+};
+
 // Verify OTP and add the user if not exists //using when signup
-export const verifyAndAddUser = async (req: Request, res: Response) : Promise<void> => {
+export const verifyAndAddUser = async (req: Request, res: Response): Promise<void> => {
   const { phone, otp, username, referralcode } = req.body;
+  let token: any;
 
   if (!phone || !otp || !username) {
-      res.status(400).json({ message: 'Phone, OTP, and username are required' });
-    return 
+    res.status(400).json({ message: 'Phone, OTP, and username are required' });
+    return;
   }
 
   try {
     // Verify OTP
     const isVerified = await verifyOtp(phone, otp);
     if (!isVerified) {
-        res.status(400).json({ message: 'Invalid OTP' });
-      return 
+      res.status(400).json({ message: 'Invalid OTP' });
+      return;
     }
 
     // Check if the user already exists
-    let user:any = await User.findOne({ phone });
+    let user: any = await User.findOne({ phone });
 
     if (!user) {
-      // Create a new user
+      // Create a new user with properly initialized arrays
       user = new User({
         username,
         phone,
         referral_code: generateReferralCode(username),
+        referralFamily: [], // Initialize empty array
+        referral_by: []     // Initialize empty array
       });
 
       await user.save();
+      
+      // Process referral code AFTER user is saved
       if (referralcode) {
-        const referrer: any = await User.findOne({ referral_code: referralcode });
-        if (referrer) {
-          // Add referred user's ID to the referrer's referralFamily array
-          referrer.referralFamily = [...(referrer.referralFamily || []), user._id];
-          await referrer.save();
+        try {
+          // Find referrer by exact code match
+          const referrer:any = await User.findOne({ referral_code: referralcode.trim() });
+          
+          if (!referrer) {
+            console.error(`Referral code not found: "${referralcode}"`);
+            // Continue without error - just don't set the referral
+          } else {
+            console.log(`Found referrer: ${referrer._id} for code: ${referralcode}`);
 
-          user.referral_by.push(referrer._id);
-          await user.save();
+            // Convert IDs to strings for comparison/debugging
+            const referrerId = referrer._id.toString();
+            const userId = user._id.toString();
+            console.log(`Linking user ${userId} to referrer ${referrerId}`);
+            
+            // Direct array manipulation with save (more reliable than update operations)
+            // 1. Add user to referrer's family
+            if (!referrer.referralFamily) referrer.referralFamily = [];
+            if (!referrer.referralFamily.some((id: mongoose.Types.ObjectId) => id.toString() === userId)) {
+              referrer.referralFamily.push(user._id);
+              await referrer.save();
+              console.log(`Updated referrer's family array: ${referrer.referralFamily.length} members`);
+            }
+            
+            // 2. Add referrer to user's referral_by
+            if (!user.referral_by) user.referral_by = [];
+            if (!user.referral_by.some((id: mongoose.Types.ObjectId) => id.toString() === referrerId)) {
+              user.referral_by.push(referrer._id);
+              await user.save();
+              console.log(`Updated user's referral_by: ${user.referral_by.map((id: mongoose.Types.ObjectId) => id.toString())}`);
+            }
+            
+            // 3. Verify the changes
+            const verifyUser = await User.findById(user._id);
+            console.log(`Verification - user referral_by: ${Array.isArray(verifyUser?.referral_by) ? verifyUser.referral_by.length : 0}`);
+          }
+        } catch (error) {
+          // Log error but don't fail registration
+          console.error('Error processing referral code:', error);
         }
       }
     }
 
-    res.status(200).json({ message: 'Login successful', user });
-    return 
-  } catch (error) {
-      res.status(500).json({ message: 'Failed to verify OTP or add user', error });
-    return 
-  }
-};
-
-export const signupUser = async (req: Request, res: Response): Promise<void> => {
-  const { phone, username } = req.body;
-
-  if (!phone || !username) {
-    res.status(400).json({ message: 'Phone and username are required' });
-    return;
-  }
-
-  try {
-    // Check if user already exists
-    const existingUser = await User.findOne({ phone });
-    
-    if (existingUser) {
-      res.status(409).json({ message: 'User with this phone number already exists' });
+    if (secretKey) {
+      token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '168h' });
+    } else {
+      res.status(500).json({ message: "Internal server error: Secret key not defined" });
       return;
     }
 
-    // Generate and send OTP for verification
-    const otp = crypto.randomInt(100000, 999999).toString();
-    await storeOtp(phone, otp);
-
-    // Store user data temporarily or in session
-    // You might want to implement a temporary storage solution
-    // for holding user data until OTP verification
-
-    res.status(200).json({ 
-      message: 'Please verify your phone number',
-      otp: otp, // In production, send this via SMS instead
-      next: 'verifyAndAddUser' // Indicate the next step
-    });
-    return;
+    res.status(200).json({ message: 'Login successful', user, token });
   } catch (error) {
-    res.status(500).json({ message: 'Failed to initiate signup process', error });
-    return;
+    console.error('Error in verifyAndAddUser:', error);
+    res.status(500).json({ message: 'Failed to verify OTP or add user', error });
   }
 };
+
 //using when login
 export const resetsendOtpController = async (req: Request, res: Response) => {
   try {
@@ -137,7 +198,7 @@ export const resetsendOtpController = async (req: Request, res: Response) => {
       }
 
       // Generate a 6-digit OTP
-      const otp = crypto.randomInt(100000, 999999).toString();
+      const otp = crypto.randomInt(1000, 9999).toString();
 
       // Store the OTP
       storeOtp(phone, otp);
@@ -343,6 +404,58 @@ export const getUserByReferralCode = async (req: Request, res: Response): Promis
     res.status(200).json({ user });
   } catch (error) {
     console.error('Error fetching user by referral code:', error);
+    res.status(500).json({ message: 'Internal server error', error });
+  }
+};
+
+// Get user data using JWT token from Authorization header
+export const getUserByToken = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Get token from Authorization header
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.status(401).json({ message: 'No token provided' });
+      return;
+    }
+
+    const token = authHeader.split(' ')[1];
+    
+    // Verify token
+    const decoded: any = jwt.verify(token, secretKey);
+    if (!decoded || !decoded.userId) {
+      res.status(401).json({ message: 'Invalid token' });
+      return;
+    }
+
+    // Find user by ID from token
+    const user = await User.findById(decoded.userId);
+
+    // Only try to populate if the user exists
+    if (user) {
+      // Try to populate, but handle if it fails
+      try {
+        await user.populate('addresses');
+        await user.populate('referralFamily');
+        await user.populate('referral_by');
+      } catch (error) {
+        console.warn('Error populating user fields:', error);
+        // Continue without populated fields
+      }
+    }
+    
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Return user data
+    res.status(200).json({ user });
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      res.status(401).json({ message: 'Invalid token' });
+      return;
+    }
+    console.error('Error fetching user by token:', error);
     res.status(500).json({ message: 'Internal server error', error });
   }
 };

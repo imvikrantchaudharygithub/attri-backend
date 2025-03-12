@@ -7,7 +7,7 @@ export const distributeCommissions = async (
   ): Promise<void> => {
     try {
       // Define percentage distribution for each generation
-      const generationPercentages = [10, 6, 3, 2, 1]; // Percentages for 1st to 5th generations
+      const generationPercentages = [11, 9, 7, 5, 3, 2, 1]; // Percentages for 1st to 5th generations
   
       let currentUser = user;
       let generation = 0;

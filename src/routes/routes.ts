@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import upload from "../middlewares/uploads";
 
-import {loginWithOTP,verifyAndAddUser ,getUserById,getUserAncestors,getAllUsers,getUserByReferralCode} from '../controllers/userController';
+import {loginWithOTP,verifyAndAddUser ,getUserById,getUserAncestors,getAllUsers,getUserByReferralCode, verifyLoginOtp, getUserByToken} from '../controllers/userController';
 import { createProductCategory,  getAllProductCategories,  updateProductCategory,  deleteProductCategory, getProductCategoryBySlug,} from '../controllers/productCategoryController';
 import {  createProduct, getAllProducts, updateProduct, deleteProduct,buyProduct, getProductBySlug} from '../controllers/productController';
 import {getPurchaseHistory} from '../controllers/purchaseHistoryController'
@@ -10,6 +10,20 @@ import { uploadBanner, getBanners, deleteBanner } from '../controllers/bannerCon
 import multer from 'multer';
 import { createTestimonial, getTestimonials, updateTestimonial, deleteTestimonial } from '../controllers/testimonialController';
 import { createSection,  getSections,  getSectionById,  updateSection, deleteSection } from '../controllers/SectionController';
+import {
+  createAddress,
+  getUserAddresses,
+  getAddressById,
+  updateAddress,
+  deleteAddress,
+  setDefaultAddress
+} from '../controllers/addressController';
+import { verifyToken } from '../middlewares/auth';
+import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems} from '../controllers/cartController';
+// import { createRazorpayOrder,verifyPayment } from '../controllers/paymentController';
+import { createOrder,getOrderById,getUserOrders} from '../controllers/orderController';
+import { createRazorpayOrder, verifyPayment } from '../controllers/paymentController';
+// import { authenticate } from '../middlewares/authentication';
 
 const router = express.Router();
 
@@ -18,9 +32,14 @@ router.get('/home-pagedata', getHomedata);
 
 
 router.post('/send-otp', loginWithOTP);
-// router.post('/resetsend-otp', resetsendOtpController);
-
+//otp for login
+router.post('/verify-login-otp', verifyLoginOtp);
+//otp for signup
 router.post('/verify-otp', verifyAndAddUser);
+
+// router.post('/resetsend-otp', resetsendOtpController);
+router.get('/user/profile', getUserByToken);
+
 router.get('/get-user/:userId', getUserById);
 router.get('/get-user-ancestor/:userId', getUserAncestors);
 router.get('/`all-users`', getAllUsers);
@@ -81,5 +100,29 @@ router.get('/get-sections', getSections);
 router.get('/sections/:id', getSectionById);
 router.put('/sections/:id', upload.fields([{ name: 'gallery', maxCount: 10 }]), updateSection);
 router.post('/delete-section', deleteSection);
+
+// Address routes
+router.post('/add-address', createAddress); // Create new address
+router.get('/users/:userId/addresses', getUserAddresses); // Get all addresses for user
+router.get('/addresses/:id', getAddressById); // Get single address
+router.put('/addresses/:id', updateAddress); // Update address
+router.delete('/addresses/:id', deleteAddress); // Delete address
+router.post('/addresses/:addressId/default',verifyToken, setDefaultAddress);
+
+// cart routes
+router.post('/add-item', verifyToken, addToCart);
+router.get('/get-cart/:userId', verifyToken, getCart);
+router.post('/remove-item', verifyToken, deleteCartItem);
+router.post('/update-item', verifyToken, updateCartItem);
+router.post('/add-bulk-items', verifyToken, addBulkCartItems);
+
+// razorpay routes
+router.post('/create-order', verifyToken, createOrder);
+router.get('/get-order/:id', verifyToken, getOrderById);
+router.get('/get-user-orders/:userId', verifyToken, getUserOrders);
+// router.post('/update-order-status', verifyToken, updateOrderStatus);
+
+router.post('/create-razorpay-order', verifyToken, createRazorpayOrder);
+router.post('/verify-payment', verifyToken, verifyPayment);
 
 export default router;
