@@ -356,3 +356,117 @@ export const addBulkCartItems = async (req: AuthenticatedRequest, res: Response)
         });
     }
 };
+
+export const increaseCartItemQuantity = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.userId;
+        const { productId } = req.body;
+
+        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+            res.status(401).json({ message: "Invalid user authentication" });
+            return;
+        }
+
+        if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+            res.status(400).json({ message: "Invalid product ID" });
+            return;
+        }
+
+        const cart = await Cart.findOneAndUpdate(
+            { userId, 'items.product': productId },
+            { $inc: { 'items.$.quantity': 1 } },
+            { new: true }
+        ).populate('items.product', 'name price images');
+
+        if (!cart) {
+            res.status(404).json({ message: "Cart or product not found" });
+            return;
+        }
+
+        res.status(200).json({
+            message: "Quantity increased successfully",
+            cart
+        });
+
+    } catch (error: any) {
+        console.error("Cart error:", error);
+        res.status(500).json({
+            message: "Failed to increase quantity",
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};
+
+export const decreaseCartItemQuantity = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.userId;
+        const { productId } = req.body;
+
+        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+            res.status(401).json({ message: "Invalid user authentication" });
+            return;
+        }
+
+        if (!productId || !mongoose.Types.ObjectId.isValid(productId)) {
+            res.status(400).json({ message: "Invalid product ID" });
+            return;
+        }
+
+        // First check current quantity
+        const currentCart = await Cart.findOne({ 
+            userId, 
+            'items.product': productId 
+        });
+        
+        if (!currentCart) {
+            res.status(404).json({ message: "Cart or product not found" });
+            return;
+        }
+        
+        const item = currentCart.items.find(item => 
+            item.product.toString() === productId
+        );
+        
+        if (!item) {
+            res.status(404).json({ message: "Product not in cart" });
+            return;
+        }
+        
+        // If quantity is 1, remove the item
+        if (item.quantity <= 1) {
+            await Cart.findOneAndUpdate(
+                { userId },
+                { $pull: { items: { product: productId } } },
+                { new: true }
+            );
+            
+            const updatedCart = await Cart.findOne({ userId })
+                .populate('items.product', 'name price images');
+                
+            res.status(200).json({
+                message: "Item removed from cart",
+                cart: updatedCart
+            });
+            return;
+        }
+        
+        // Otherwise decrease quantity by 1
+        const cart = await Cart.findOneAndUpdate(
+            { userId, 'items.product': productId },
+            { $inc: { 'items.$.quantity': -1 } },
+            { new: true }
+        ).populate('items.product', 'name price images');
+
+        res.status(200).json({
+            message: "Quantity decreased successfully",
+            cart
+        });
+
+    } catch (error: any) {
+        console.error("Cart error:", error);
+        res.status(500).json({
+            message: "Failed to decrease quantity",
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};

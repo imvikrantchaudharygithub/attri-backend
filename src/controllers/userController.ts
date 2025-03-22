@@ -323,29 +323,88 @@ const populateReferralFamily = async (userId: string): Promise<any> => {
     };
   };
 
-export const getUserById = async (req: Request, res: Response): Promise<void> => {
-    const { userId } = req.params;
+const getReferralsByLevel = async (userId: string, maxLevel: number = 7): Promise<any> => {
+  const user = await User.findById(userId).lean();
   
-    if (!userId) {
-      res.status(400).json({ message: 'User ID is required' });
-      return;
-    }
+  if (!user) return null;
   
-    try {
-      // Find the user by ID and populate the referralFamily field
-      const user = await populateReferralFamily(userId);
-
-      if (!user) {
-        res.status(404).json({ message: 'User not found' });
-        return;
+  // Initialize levels structure
+  const levels: { [key: number]: any[] } = {};
+  for (let i = 1; i <= maxLevel; i++) {
+    levels[i] = [];
+  }
+  
+  // Function to recursively collect referrals by level
+  const collectReferralsByLevel = async (id: string, currentLevel: number = 1) => {
+    if (currentLevel > maxLevel) return;
+    
+    const referrer:any = await User.findById(id).lean();
+    if (!referrer || !referrer.referralFamily || !referrer.referralFamily.length) return;
+    
+    // Get all direct referrals for this user
+    for (const referralId of referrer.referralFamily) {
+      const referredUser = await User.findById(referralId).lean();
+      if (referredUser) {
+        levels[currentLevel].push({
+          _id: referredUser._id,
+          username: referredUser.username,
+          phone: referredUser.phone,
+          referral_code: referredUser.referral_code,
+          balance: referredUser.balance,
+          adult: referredUser.adult,
+          profileimage: referredUser.profileimage
+        });
+        
+        // Recursively process this user's referrals at the next level
+        await collectReferralsByLevel(referralId.toString(), currentLevel + 1);
       }
-  
-      res.status(200).json({ user });
-    } catch (error) {
-      console.error('Error fetching user by ID:', error);
-      res.status(500).json({ message: 'Internal server error', error });
     }
   };
+  
+  // Start collection from the user's referrals
+  await collectReferralsByLevel(userId);
+  
+  // Convert levels object to array for easier iteration
+  const levelsArray = Object.keys(levels).map(level => ({
+    level: parseInt(level),
+    referrals: levels[parseInt(level)]
+  }));
+  
+  return {
+    _id: user._id,
+    username: user.username,
+    phone: user.phone,
+    referral_code: user.referral_code,
+    balance: user.balance,
+    adult: user.adult,
+    profileimage: user.profileimage,
+    referralsByLevel: levelsArray
+  };
+};
+
+export const getUserById = async (req: Request, res: Response): Promise<void> => {
+  const { userId } = req.params;
+
+  if (!userId) {
+    res.status(400).json({ message: 'User ID is required' });
+    return;
+  }
+
+  try {
+    // Get user with referrals organized by levels 1-7
+    const user = await getReferralsByLevel(userId);
+
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    res.status(200).json({ user });
+  } catch (error) {
+    console.error('Error fetching user by ID:', error);
+    res.status(500).json({ message: 'Internal server error', error });
+  }
+};
 
 // Utility to generate a referral code
 const generateReferralCode = (username: string): string => {
@@ -429,6 +488,7 @@ export const getUserByToken = async (req: Request, res: Response): Promise<void>
 
     // Find user by ID from token
     const user = await User.findById(decoded.userId);
+    
 
     // Only try to populate if the user exists
     if (user) {

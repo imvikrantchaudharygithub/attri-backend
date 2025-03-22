@@ -19,7 +19,7 @@ import {
   setDefaultAddress
 } from '../controllers/addressController';
 import { verifyToken } from '../middlewares/auth';
-import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems} from '../controllers/cartController';
+import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems, increaseCartItemQuantity, decreaseCartItemQuantity} from '../controllers/cartController';
 // import { createRazorpayOrder,verifyPayment } from '../controllers/paymentController';
 import { createOrder,getOrderById,getUserOrders} from '../controllers/orderController';
 import { createRazorpayOrder, verifyPayment } from '../controllers/paymentController';
@@ -42,7 +42,7 @@ router.get('/user/profile', getUserByToken);
 
 router.get('/get-user/:userId', getUserById);
 router.get('/get-user-ancestor/:userId', getUserAncestors);
-router.get('/`all-users`', getAllUsers);
+router.get('/all-users', getAllUsers);
 router.get('/user/referral/:referralCode', getUserByReferralCode);
 
 // product category
@@ -89,10 +89,10 @@ router.get("/banners", getBanners);
 router.post("/delete-banner", deleteBanner);
 
 // Testimonial routes
-router.post('/testimonials', upload.fields([{ name: "profilePic", maxCount: 1 }]), createTestimonial);
-router.get('/testimonials', getTestimonials);
-router.put('/testimonials/:id', upload.single('profilePic'), updateTestimonial);
-router.delete('/testimonials/:id', deleteTestimonial);
+router.post('/create-testimonial', upload.fields([{ name: "profilePic", maxCount: 1 }]), createTestimonial);
+router.get('/get-testimonials', getTestimonials);
+router.put('/update-testimonials/:id', upload.single('profilePic'), updateTestimonial);
+router.delete('/delete-testimonials/:id', deleteTestimonial);
 
 // Section routes
 router.post('/sections', upload.fields([{ name: 'gallery', maxCount: 10 }]), createSection);
@@ -115,6 +115,9 @@ router.get('/get-cart/:userId', verifyToken, getCart);
 router.post('/remove-item', verifyToken, deleteCartItem);
 router.post('/update-item', verifyToken, updateCartItem);
 router.post('/add-bulk-items', verifyToken, addBulkCartItems);
+// Cart quantity routes
+router.post('/cart/increase-quantity', verifyToken, increaseCartItemQuantity);
+router.post('/cart/decrease-quantity', verifyToken, decreaseCartItemQuantity);
 
 // razorpay routes
 router.post('/create-order', verifyToken, createOrder);
@@ -124,5 +127,7 @@ router.get('/get-user-orders/:userId', verifyToken, getUserOrders);
 
 router.post('/create-razorpay-order', verifyToken, createRazorpayOrder);
 router.post('/verify-payment', verifyToken, verifyPayment);
+
+
 
 export default router;

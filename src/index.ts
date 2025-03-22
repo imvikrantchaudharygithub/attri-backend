@@ -25,7 +25,7 @@ const allowedOrigins = [
 ];
 
 app.use((req, res, next) => {
-  const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001'];
+  const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001', 'http://172.20.10.5:3001'];
   const origin = req.headers.origin;
   
   if (origin && allowedOrigins.includes(origin)) {
