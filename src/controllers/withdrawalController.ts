@@ -126,16 +126,7 @@ export const withdrawalController = {
         return;
       }
 
-      // Deduct balance from user account
-      const user:any = await User.findById(withdrawal.user);
-      if (user && user.balance >= withdrawal.amount) {
-        user.balance -= withdrawal.amount;
-        await user.save();
-      } else {
-        res.status(400).json({ message: 'Insufficient balance for processing' });
-        return;
-      }
-
+      // Only update status without balance deduction
       withdrawal.status = 'approved';
       withdrawal.processedAt = new Date();
       await withdrawal.save();
