@@ -4,6 +4,7 @@ import Order from '../models/order.model';
 import User from '../models/user.model';
 import Product from '../models/product.model';
 import Address from '../models/address.model';
+import mongoose from 'mongoose';
 
 interface IOrderProduct {
   product: string;
@@ -174,6 +175,68 @@ export const getUserOrders = async (req: Request, res: Response): Promise<void> 
     res.json(orders);
   } catch (error) {
     console.error('Error fetching user orders:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+export const getUserRecentOrders = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userId } = req.params;
+
+    // Validate user ID format
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      res.status(400).json({ message: 'Invalid user ID format' });
+      return;
+    }
+
+    // Calculate date 30 days ago
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Check if user exists
+    const user = await User.findById(userId);
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Convert userId to ObjectId for aggregation
+    const userIdObject = new mongoose.Types.ObjectId(userId);
+
+    // Get orders from last 30 days
+    const orders = await Order.find({
+      user: userIdObject,
+      createdAt: { $gte: thirtyDaysAgo }
+    })
+      .populate('user', 'name email')
+      .populate('address')
+      .populate('products.product', 'name price images');
+
+    // Calculate total amount of recent orders
+    const totalResult = await Order.aggregate([
+      {
+        $match: {
+          user: userIdObject,
+          createdAt: { $gte: thirtyDaysAgo }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: "$totalAmount" }
+        }
+      }
+    ]);
+
+    const totalAmount = totalResult[0]?.totalAmount || 0;
+
+    res.json({
+      orders,
+      totalAmount
+    });
+    
+  } catch (error) {
+    console.error('Error fetching recent orders:', error);
     res.status(500).json({ message: 'Server error' });
   }
 };

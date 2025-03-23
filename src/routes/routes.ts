@@ -21,9 +21,11 @@ import {
 import { verifyToken } from '../middlewares/auth';
 import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems, increaseCartItemQuantity, decreaseCartItemQuantity} from '../controllers/cartController';
 // import { createRazorpayOrder,verifyPayment } from '../controllers/paymentController';
-import { createOrder,getOrderById,getUserOrders} from '../controllers/orderController';
+import { createOrder,getOrderById,getUserOrders, getUserRecentOrders} from '../controllers/orderController';
 import { createRazorpayOrder, verifyPayment } from '../controllers/paymentController';
 // import { authenticate } from '../middlewares/authentication';
+    import { addBankDetail, getBankDetails, updateBankDetail, deleteBankDetail, setDefaultAccount } from '../controllers/userBankController';
+import { withdrawalController } from '../controllers/withdrawalController';
 
 const router = express.Router();
 
@@ -92,7 +94,7 @@ router.post("/delete-banner", deleteBanner);
 router.post('/create-testimonial', upload.fields([{ name: "profilePic", maxCount: 1 }]), createTestimonial);
 router.get('/get-testimonials', getTestimonials);
 router.put('/update-testimonials/:id', upload.single('profilePic'), updateTestimonial);
-router.delete('/delete-testimonials/:id', deleteTestimonial);
+router.post('/delete-testimonials', deleteTestimonial);
 
 // Section routes
 router.post('/sections', upload.fields([{ name: 'gallery', maxCount: 10 }]), createSection);
@@ -123,11 +125,25 @@ router.post('/cart/decrease-quantity', verifyToken, decreaseCartItemQuantity);
 router.post('/create-order', verifyToken, createOrder);
 router.get('/get-order/:id', verifyToken, getOrderById);
 router.get('/get-user-orders/:userId', verifyToken, getUserOrders);
+router.get('/get-user-recent-orders/:userId', verifyToken, getUserRecentOrders);
 // router.post('/update-order-status', verifyToken, updateOrderStatus);
 
 router.post('/create-razorpay-order', verifyToken, createRazorpayOrder);
 router.post('/verify-payment', verifyToken, verifyPayment);
 
 
+// user bank routes
+router.post('/add-bank-detail', verifyToken, addBankDetail);
+router.get('/get-bank-details', verifyToken, getBankDetails);
+router.put('/update-bank-detail/:id', verifyToken, updateBankDetail);
+router.post('/delete-bank-detail', verifyToken, deleteBankDetail);
+router.post('/set-default-bank/:id', verifyToken, setDefaultAccount);
+
+// Withdrawal routes
+router.post('/create-withdrawal', verifyToken, withdrawalController.createWithdrawal);
+router.get('/withdrawals', withdrawalController.getWithdrawals);
+router.get('/user-withdrawals', verifyToken, withdrawalController.getWithdrawalsByUser);
+router.post('/withdrawals/approve', withdrawalController.acceptWithdrawal);
+router.post('/withdrawals/reject', withdrawalController.rejectWithdrawal);
 
 export default router;

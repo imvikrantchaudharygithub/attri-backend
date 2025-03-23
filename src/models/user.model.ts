@@ -11,7 +11,7 @@ const userSchema: Schema = new Schema({
     profileimage: { type: String ,default:''}, 
     referralFamily: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     addresses: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Address' }],
-   
+   bankDetails: [{ type: mongoose.Schema.Types.ObjectId, ref: 'UserBankDetail' }],
     // referral_family: { type: Number,default:0 }, 
     // email: { type: String, required: true, unique: true },
     // transaction: [{ type: Schema.Types.ObjectId, ref: 'Transaction' }],

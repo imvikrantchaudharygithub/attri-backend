@@ -83,8 +83,9 @@ export const updateTestimonial = async (req: Request, res: Response): Promise<vo
 // Delete testimonial
 export const deleteTestimonial = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.body;
     const testimonial = await Testimonial.findByIdAndDelete(id);
+    console.log(testimonial,req.body);
 
     if (!testimonial) {
       res.status(404).json({ success: false, message: 'Testimonial not found' });
