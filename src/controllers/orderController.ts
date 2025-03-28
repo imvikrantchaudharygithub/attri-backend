@@ -86,7 +86,7 @@ export const createOrder = async (req: Request, res: Response) => {
 export const getAllOrders = async (req: Request, res: Response) => {
   try {
     const orders = await Order.find()
-      .populate('user', 'name email')
+      .populate('user', 'username phone')
       .populate('address')
       .populate('products.product', 'name price images');
       
@@ -240,3 +240,4 @@ export const getUserRecentOrders = async (req: Request, res: Response): Promise<
     res.status(500).json({ message: 'Server error' });
   }
 };
+

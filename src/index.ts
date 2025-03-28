@@ -73,7 +73,7 @@ app.use('/api', router);
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello, World!');
 });
-// sendSMS("9520887693", '123456').then((response) => {
+// sendSMS("8191046161", 1234).then((response) => {
 //   console.log(response);
 // }).catch((error) => {
 //   console.log(error);

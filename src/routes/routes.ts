@@ -1,9 +1,9 @@
-import express, { Request, Response } from 'express';
+import express, { Request, Response, RequestHandler } from 'express';
 import upload from "../middlewares/uploads";
 
-import {loginWithOTP,verifyAndAddUser ,getUserById,getUserAncestors,getAllUsers,getUserByReferralCode, verifyLoginOtp, getUserByToken} from '../controllers/userController';
+import {loginWithOTP,verifyAndAddUser ,getUserById,getUserAncestors,getAllUsers,getUserByReferralCode, verifyLoginOtp, getUserByToken, deleteUser, setUserAsRecommended, removeUserFromRecommended, getRecommendedUsers} from '../controllers/userController';
 import { createProductCategory,  getAllProductCategories,  updateProductCategory,  deleteProductCategory, getProductCategoryBySlug,} from '../controllers/productCategoryController';
-import {  createProduct, getAllProducts, updateProduct, deleteProduct,buyProduct, getProductBySlug} from '../controllers/productController';
+import {  createProduct, getAllProducts, updateProduct, deleteProduct,buyProduct, getProductBySlug, searchProducts} from '../controllers/productController';
 import {getPurchaseHistory} from '../controllers/purchaseHistoryController'
 import{getHomedata} from '../controllers/homeController'
 import { uploadBanner, getBanners, deleteBanner } from '../controllers/bannerController';
@@ -21,7 +21,7 @@ import {
 import { verifyToken } from '../middlewares/auth';
 import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems, increaseCartItemQuantity, decreaseCartItemQuantity} from '../controllers/cartController';
 // import { createRazorpayOrder,verifyPayment } from '../controllers/paymentController';
-import { createOrder,getOrderById,getUserOrders, getUserRecentOrders} from '../controllers/orderController';
+import { createOrder,getAllOrders,getOrderById,getUserOrders, getUserRecentOrders} from '../controllers/orderController';
 import { createRazorpayOrder, verifyPayment } from '../controllers/paymentController';
 // import { authenticate } from '../middlewares/authentication';
     import { addBankDetail, getBankDetails, updateBankDetail, deleteBankDetail, setDefaultAccount } from '../controllers/userBankController';
@@ -46,7 +46,7 @@ router.get('/get-user/:userId', getUserById);
 router.get('/get-user-ancestor/:userId', getUserAncestors);
 router.get('/all-users', getAllUsers);
 router.get('/user/referral/:referralCode', getUserByReferralCode);
-
+router.post('/delete-user', deleteUser);
 // product category
 const categoryUpload = multer({
     storage: multer.memoryStorage(),
@@ -84,6 +84,10 @@ router.post('/buy-product', buyProduct);
 
 router.get("/purchase-history", getPurchaseHistory);
 
+// Cast the controller to RequestHandler type
+const searchProductsHandler: RequestHandler = searchProducts;
+
+router.post("/search-products", searchProductsHandler);
 
 // upload banner 
 router.post("/upload-banner", upload.fields([{ name: "image", maxCount: 1 }, { name: "mob_image", maxCount: 1 }]), uploadBanner);
@@ -126,6 +130,7 @@ router.post('/create-order', verifyToken, createOrder);
 router.get('/get-order/:id', verifyToken, getOrderById);
 router.get('/get-user-orders/:userId', verifyToken, getUserOrders);
 router.get('/get-user-recent-orders/:userId', verifyToken, getUserRecentOrders);
+router.get('/get-all-orders', getAllOrders);
 // router.post('/update-order-status', verifyToken, updateOrderStatus);
 
 router.post('/create-razorpay-order', verifyToken, createRazorpayOrder);
@@ -145,5 +150,10 @@ router.get('/withdrawals', withdrawalController.getWithdrawals);
 router.get('/user-withdrawals', verifyToken, withdrawalController.getWithdrawalsByUser);
 router.post('/withdrawals/approve', withdrawalController.acceptWithdrawal);
 router.post('/withdrawals/reject', withdrawalController.rejectWithdrawal);
+
+// Recommended user routes
+router.post('/set-user-recommended', setUserAsRecommended);
+router.post('/remove-user-recommended', removeUserFromRecommended);
+router.get('/recommended-users', getRecommendedUsers);
 
 export default router;

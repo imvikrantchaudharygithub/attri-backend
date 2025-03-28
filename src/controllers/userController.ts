@@ -8,6 +8,7 @@ import { uploadCloudinary } from '../services/cloudinaryService';
 import cloudinary from '../config/cloudinary';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
+import { sendSMS } from '../services/smsSevice';
 dotenv.config();
 const secretKey :any = process.env.SECRET_KEY;
 // Generate OTP and send to the user
@@ -38,7 +39,8 @@ export const loginWithOTP = async (req: Request, res: Response): Promise<void> =
     const otp = crypto.randomInt(1000, 9999).toString();
 
     await storeOtp(phone, otp);
-    res.status(200).json({ message: `OTP=${otp} sent successfully` });
+  //  await sendSMS(phone, Number(otp));
+    res.status(200).json({ message: `OTP ${otp} sent successfully` });
     return;
   } catch (error) {
     res.status(500).json({ message: 'Failed to send OTP', error });
@@ -94,7 +96,7 @@ export const verifyLoginOtp = async (req: Request, res: Response): Promise<void>
 
 // Verify OTP and add the user if not exists //using when signup
 export const verifyAndAddUser = async (req: Request, res: Response): Promise<void> => {
-  const { phone, otp, username, referralcode } = req.body;
+  const { phone, otp, username, referralcode, dateofbirth } = req.body;
   let token: any;
 
   if (!phone || !otp || !username) {
@@ -120,7 +122,8 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
         phone,
         referral_code: generateReferralCode(username),
         referralFamily: [], // Initialize empty array
-        referral_by: []     // Initialize empty array
+        referral_by: [],     // Initialize empty array
+        dateofbirth: dateofbirth
       });
 
       await user.save();
@@ -324,7 +327,7 @@ const populateReferralFamily = async (userId: string): Promise<any> => {
   };
 
 const getReferralsByLevel = async (userId: string, maxLevel: number = 7): Promise<any> => {
-  const user = await User.findById(userId).lean();
+  const user = await User.findById(userId).lean().populate('referralFamily', 'username phone'); 
   
   if (!user) return null;
   
@@ -352,7 +355,8 @@ const getReferralsByLevel = async (userId: string, maxLevel: number = 7): Promis
           referral_code: referredUser.referral_code,
           balance: referredUser.balance,
           adult: referredUser.adult,
-          profileimage: referredUser.profileimage
+          profileimage: referredUser.profileimage,
+
         });
         
         // Recursively process this user's referrals at the next level
@@ -378,7 +382,8 @@ const getReferralsByLevel = async (userId: string, maxLevel: number = 7): Promis
     balance: user.balance,
     adult: user.adult,
     profileimage: user.profileimage,
-    referralsByLevel: levelsArray
+    referralsByLevel: levelsArray,
+    referralFamily: user.referralFamily
   };
 };
 
@@ -519,3 +524,124 @@ export const getUserByToken = async (req: Request, res: Response): Promise<void>
     res.status(500).json({ message: 'Internal server error', error });
   }
 };
+export const deleteUser = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const userId = req.body.userId
+    if (!userId) {
+      res.status(401).json({ message: 'Unauthorized' });
+      return;
+    }
+
+    const deletedUser = await User.findOneAndDelete({ _id: userId });
+
+    if (!deletedUser) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    res.json({ 
+      message: 'User deleted successfully',
+      deletedUser: {
+        id: deletedUser._id,
+        phone: deletedUser.phone,
+        username: deletedUser.username
+      }
+    });
+  } catch (error: any) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ 
+      message: 'Error deleting user',
+      error: error.message 
+    });
+  }
+};
+
+// Set user as recommended
+export const setUserAsRecommended = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      res.status(400).json({ message: 'User ID is required' });
+      return;
+    }
+    
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { recommendedUser: true },
+      { new: true }
+    );
+    
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+    
+    res.status(200).json({ 
+      message: 'User set as recommended successfully',
+      user
+    });
+  } catch (error: any) {
+    console.error('Error setting user as recommended:', error);
+    res.status(500).json({ 
+      message: 'Failed to set user as recommended',
+      error: error.message 
+    });
+  }
+};
+
+// Remove user from recommended
+export const removeUserFromRecommended = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { userId } = req.body;
+    
+    if (!userId) {
+      res.status(400).json({ message: 'User ID is required' });
+      return;
+    }
+    
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { recommendedUser: false },
+      { new: true }
+    );
+    
+    if (!user) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+    
+    res.status(200).json({ 
+      message: 'User removed from recommended successfully',
+      user
+    });
+  } catch (error: any) {
+    console.error('Error removing user from recommended:', error);
+    res.status(500).json({ 
+      message: 'Failed to remove user from recommended',
+      error: error.message 
+    });
+  }
+};
+
+// Get all recommended users
+export const getRecommendedUsers = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const users = await User.find({ recommendedUser: true })
+      .select('_id username phone profileimage referral_code');
+      
+    res.status(200).json({ 
+      message: 'Recommended users retrieved successfully',
+      count: users.length,
+      users
+    });
+  } catch (error: any) {
+    console.error('Error fetching recommended users:', error);
+    res.status(500).json({ 
+      message: 'Failed to fetch recommended users',
+      error: error.message 
+    });
+  }
+};
+
+

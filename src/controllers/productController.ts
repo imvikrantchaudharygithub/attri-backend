@@ -347,3 +347,41 @@ export const buyProduct = async (req: Request, res: Response): Promise<void> => 
       res.status(500).json({ message: 'Internal server error', error });
     }
   };
+
+export const searchProducts = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { searchTerm } = req.body;
+    
+    if (!searchTerm) {
+      res.status(400).json({ message: 'Search term is required' });
+      return;
+    }
+
+    const searchPattern = new RegExp(searchTerm, 'i');
+    
+    // First find categories that match the search term
+    const categories = await ProductCategory.find({ name: searchPattern }).select('_id');
+    const categoryIds = categories.map(cat => cat._id);
+    
+    // Then search products with those categories or matching name/description
+    const products = await Product.find({
+      $or: [
+        { name: searchPattern },
+        { description: searchPattern },
+        { category: { $in: categoryIds } }
+      ]
+    })
+    .populate('category', 'name')
+    res.status(200).json({
+      success: true,
+      count: products.length,
+      data: products
+    });
+  } catch (error: any) {
+    console.error("Search error:", error);
+    res.status(500).json({
+      message: 'Error searching products',
+      error: error.message
+    });
+  }
+};

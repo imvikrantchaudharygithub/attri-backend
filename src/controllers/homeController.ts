@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import Banner from '../models/banner.model';
 import ProductCategory from '../models/productCategory.model';
 import Section from '../models/section.model';
+import Testimonial from '../models/testimonial.model';
 
 export const getHomedata = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -9,6 +10,7 @@ export const getHomedata = async (req: Request, res: Response): Promise<void> =>
       const banners = await Banner.find({ status: 'active' });
       const sectionsData = await Section.find();
       // Get categories with populated products
+      const testimonials = await Testimonial.find();
       const categories = await ProductCategory.find()
         .populate({
           path: 'products',
@@ -21,7 +23,8 @@ export const getHomedata = async (req: Request, res: Response): Promise<void> =>
         data: {
           banners,
           categories,
-          sectionsData
+          sectionsData,
+          testimonials
         }
       });
     } catch (error) {
