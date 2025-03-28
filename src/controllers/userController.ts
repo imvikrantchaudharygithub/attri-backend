@@ -39,8 +39,8 @@ export const loginWithOTP = async (req: Request, res: Response): Promise<void> =
     const otp = crypto.randomInt(1000, 9999).toString();
 
     await storeOtp(phone, otp);
-  //  await sendSMS(phone, Number(otp));
-    res.status(200).json({ message: `OTP ${otp} sent successfully` });
+   await sendSMS(phone, Number(otp));
+    res.status(200).json({ message: `OTP sent successfully` });
     return;
   } catch (error) {
     res.status(500).json({ message: 'Failed to send OTP', error });
