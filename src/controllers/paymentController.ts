@@ -5,7 +5,8 @@ import Cart from '../models/cart.model';
 import crypto from 'crypto';
 import User from '../models/user.model';
 import { distributeCommissions } from '../services/priceDistribution';
-
+// import { createSingleOrderShipment } from '../controllers/deliveryController';
+import { createShiprocketOrder } from '../controllers/shiprocketController';
 export const createRazorpayOrder = async (req: Request, res: Response) => {
     try {
         const { orderId } = req.body;
@@ -111,9 +112,12 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
           console.log( "verify payment user",user);
 
         await distributeCommissions(user?.toObject(),updatedOrder.totalAmount);
+    //    const shipmentData = await createSingleOrderShipment(updatedOrder._id.toString());
+        const shipmentData = await createShiprocketOrder(updatedOrder._id.toString());
         res.status(200).json({
             message: 'Payment verified successfully',
-            order: updatedOrder
+            order: updatedOrder,
+            shipmentData: shipmentData
         });
 
     } catch (error: any) {
@@ -124,3 +128,90 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
         });
     }
 }; 
+
+
+export const distributeCommissionsManual = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { userId, amount } = req.body;
+
+        // Validate user and amount
+        const user:any = await User.findById(userId).populate({
+            path: "referral_by",
+            populate: {
+              path: "referral_by",
+              populate: {
+                path: "referral_by",
+                populate: {
+                  path: "referral_by",
+                  populate: {
+                    path: "referral_by",
+                    populate: {
+                      path: "referral_by",
+                      populate: {
+                        path: "referral_by",
+                      },
+                    },
+                  },
+                  
+                },
+              },
+            },
+          });
+          console.log( "payment distribute user",user); 
+
+        await distributeCommissions(user?.toObject(),amount);
+        res.status(200).json({
+            message: 'Payment verified successfully',
+            user: user
+        });
+    } catch (error: any) {
+        console.error('Payment verification error:', error);
+        res.status(400).json({
+            message: 'Payment verification failed',
+            error: error.message
+        });
+    }
+};
+
+
+
+
+export const deductUserBalance = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { userId, amount } = req.body;
+
+        if (!userId || !amount) {
+            res.status(400).json({ message: 'User ID and amount are required' });
+            return;
+        }
+
+        const user:any = await User.findById(userId);
+        if (!user) {
+            res.status(404).json({ message: 'User not found' });
+            return;
+        }
+
+        if (user.balance < amount) {
+            res.status(400).json({ message: 'Insufficient balance' });
+            return;
+        }
+
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            { $inc: { balance: -amount } },
+            { new: true }
+        );
+
+        res.status(200).json({
+            message: 'Balance updated successfully',
+            user: updatedUser
+        });
+    } catch (error: any) {
+        console.error('Balance deduction error:', error);
+        res.status(500).json({
+            message: 'Failed to deduct balance',
+            error: error.message
+        });
+    }
+};
+

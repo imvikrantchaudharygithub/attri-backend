@@ -7,7 +7,7 @@ export const distributeCommissions = async (
   ): Promise<void> => {
     try {
       // Define percentage distribution for each generation
-      const generationPercentages = [11, 9, 7, 5, 3, 2, 1]; // Percentages for 1st to 5th generations
+      const generationPercentages = [11, 9, 7, 5, 3, 2, 1]; // Percentages for 1st to 7th generations
   
       let currentUser = user;
       let generation = 0;
@@ -20,14 +20,21 @@ export const distributeCommissions = async (
         const percentage = generationPercentages[generation];
         const commission = (percentage / 100) * productPrice;
   
-        // Update the balance of the referred user
+        // Update user with commission history
         await User.findByIdAndUpdate(currentUser._id, {
           $inc: { balance: commission },
+          $push: {
+            commissionHistory: {
+              amount: commission,
+              level: generation + 1,
+              fromUser: user._id
+            }
+          }
         });
   
-        console.log(
-          `Generation ${generation + 1}: ${currentUser.username} earned ${commission}`
-        );
+        // console.log(
+        //   `Generation ${generation + 1}: ${currentUser.username} earned ${commission}`
+        // );
   
         // Increment generation
         generation++;

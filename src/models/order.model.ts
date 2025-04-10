@@ -12,6 +12,10 @@ const orderSchema = new mongoose.Schema({
     ref: 'Address',
     required: true
   },
+  tracking_number: {
+    type: String,
+    default: null
+  },
   products: [{
     product: {
       type: mongoose.Schema.Types.ObjectId,

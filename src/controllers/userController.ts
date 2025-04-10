@@ -223,6 +223,10 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
         path: "addresses",
         model: "Address", 
         select: "street city state country zipCode", // Fetch only required fields
+      }).populate({
+        path: "commissionHistory",
+        model: "CommissionHistory",
+        select: "amount date level fromUser"
       });
   
       res.status(200).json({ users });

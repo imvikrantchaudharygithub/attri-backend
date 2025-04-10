@@ -14,6 +14,12 @@ const userSchema: Schema = new Schema({
     addresses: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Address' }],
    bankDetails: [{ type: mongoose.Schema.Types.ObjectId, ref: 'UserBankDetail' }],
     recommendedUser: { type: Boolean, default: false },
+    commissionHistory: [{
+        amount: { type: Number, required: true },
+        date: { type: Date, default: Date.now },
+        level: { type: Number, required: true },
+        fromUser: { type: Schema.Types.ObjectId, ref: 'User' }
+    }],
     // referral_family: { type: Number,default:0 }, 
     // email: { type: String, required: true, unique: true },
     // transaction: [{ type: Schema.Types.ObjectId, ref: 'Transaction' }],

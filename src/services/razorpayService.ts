@@ -12,8 +12,8 @@ class RazorpayService {
         // }
 
         this.razorpay = new Razorpay({
-            key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_cuWPmyQArRt5OR',
-            key_secret: process.env.RAZORPAY_KEY_SECRET || 'kAo0KQYcBccaYPIjd41ZxjHL'
+            key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_YaVIcCUvop1Y5l',
+            key_secret: process.env.RAZORPAY_KEY_SECRET || 'c6Z7JC19C6ullu2Fb1aD10hM'
         });
     }
 
@@ -39,7 +39,7 @@ class RazorpayService {
             
             // Generate expected signature using the KEY_SECRET directly from env
             const expectedSignature = crypto
-                .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'kAo0KQYcBccaYPIjd41ZxjHL')
+                .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'c6Z7JC19C6ullu2Fb1aD10hM')
                 .update(body)
                 .digest('hex');
             

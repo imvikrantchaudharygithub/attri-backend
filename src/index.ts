@@ -8,6 +8,9 @@ import router from './routes/routes'; // Assuming you have a `router.ts` file in
 import path from 'path';
 import fs from 'fs';
 import { sendSMS } from './services/smsSevice';
+import { createSingleOrderShipment } from '../src/controllers/deliveryController';
+import { createShiprocketOrder } from '../src/controllers/shiprocketController';
+import { shiprocketService } from '../src/services/shirocketService';
 // Load environment variables from .env file
 dotenv.config();
 
@@ -79,6 +82,23 @@ app.get('/', (req: Request, res: Response) => {
 //   console.log(error);
 // });
 // Start the server
+
+// createSingleOrderShipment("67f0dd98d754e8c324f3fda5").then((response) => {
+//   console.log(response);
+// }).catch((error) => {
+//   console.log(error);
+// });
+
+// createShiprocketOrder("67f55d97c0edd3833351a806").then((response) => {
+//   console.log(response);
+// }).catch((error) => {
+//   console.log(error);
+// });'
+// shiprocketService.trackShipment(800819084).then((response) => {
+//   console.log(response);
+// }).catch((error) => {
+//   console.log(error);
+// });
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
-});
+});``

@@ -101,7 +101,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
 export const getOrderById = async (req: Request, res: Response) => {
   try {
     const order = await Order.findById(req.params.id)
-      .populate('user', 'name email phone referral_code')
+      .populate('user', 'name phone referral_code')
       .populate('address')
       .populate('products.product');
 

@@ -22,10 +22,12 @@ import { verifyToken } from '../middlewares/auth';
 import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems, increaseCartItemQuantity, decreaseCartItemQuantity} from '../controllers/cartController';
 // import { createRazorpayOrder,verifyPayment } from '../controllers/paymentController';
 import { createOrder,getAllOrders,getOrderById,getUserOrders, getUserRecentOrders} from '../controllers/orderController';
-import { createRazorpayOrder, verifyPayment } from '../controllers/paymentController';
+import { createRazorpayOrder, verifyPayment, distributeCommissionsManual, deductUserBalance } from '../controllers/paymentController';
 // import { authenticate } from '../middlewares/authentication';
     import { addBankDetail, getBankDetails, updateBankDetail, deleteBankDetail, setDefaultAccount } from '../controllers/userBankController';
 import { withdrawalController } from '../controllers/withdrawalController';
+import { addWarehouse, getTrackingDetails, getShipmentDetails, manifestOrder, getCourierList } from '../controllers/deliveryController';
+import { addPickupAddress, generateManifest, shiprocketWebhook } from '../controllers/shiprocketController';
 
 const router = express.Router();
 
@@ -156,4 +158,20 @@ router.post('/set-user-recommended', setUserAsRecommended);
 router.post('/remove-user-recommended', removeUserFromRecommended);
 router.get('/recommended-users', getRecommendedUsers);
 
+// Add to your existing routes
+router.post('/distribute-commissions-manual', distributeCommissionsManual);
+router.post('/deduct-user-balance', deductUserBalance);
+
+// delivery routes
+router.post('/get-tracking-details', getTrackingDetails);
+router.post('/get-shipment-details', getShipmentDetails);
+router.post('/add-warehouse', addWarehouse);
+router.post('/manifest-order', manifestOrder);
+router.get('/get-courier-list', getCourierList);
+
+
+// shiprocket routes
+router.post('/add-pickup-address', addPickupAddress);
+router.post('/generate-manifest', generateManifest);
+router.post('/shiprocket-webhook', shiprocketWebhook);
 export default router;
