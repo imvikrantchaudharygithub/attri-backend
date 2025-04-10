@@ -170,22 +170,46 @@ export const generateManifest = async (req: Request, res: Response): Promise<voi
   }
 };
 
-export const shiprocketWebhook = async (req: Request, res: Response): Promise<void> => {
+export const shiprocketWebhook = async (req: Request, res: Response) => {
   try {
-    const { event, data } = req.body;
+    const signature = req.headers['x-shiprocket-signature'] as string;
+    const payload = req.body;
 
-    console.log('Received Shiprocket webhook event:', event);   
+    // Verify webhook signature
+    if (!verifySignature(signature, payload)) {
+      return res.status(401).json({ success: false, message: 'Invalid signature' });
+    }
+    console.log(payload);
+    // Process webhook event
+    switch(payload.event) {
+      case 'tracking':
+        await handleTrackingUpdate(payload.data);
+        break;
+      case 'order_status':
+        await handleOrderStatusUpdate(payload.data);
+        break;
+      default:
+        console.log('Unhandled webhook event:', payload.event);
+    }
 
-    res.json({
-      success: true,
-      message: 'Webhook received successfully'
-    });
+    res.status(200).json({ success: true });
 
-  } catch (error:any) {
-    console.error('Shiprocket webhook error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message || 'Failed to process webhook'
-    });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ success: false, message: 'Webhook processing failed' });
   }
+};
+
+// Helper functions
+const verifySignature = (signature: string, payload: any) => {
+  // Implement your signature verification logic
+  return true; // Temporary bypass
+};
+
+const handleTrackingUpdate = async (data: any) => {
+  // Update order tracking in your database
+};
+
+const handleOrderStatusUpdate = async (data: any) => {
+  // Update order status in your database
 };
