@@ -172,13 +172,13 @@ export const generateManifest = async (req: Request, res: Response): Promise<voi
 
 export const shiprocketWebhook = async (req: Request, res: Response): Promise<void> => {
   try {
-    const signature = req.headers['x-shiprocket-signature'] as string;
+    const signature = req.headers['x-api-key'] as string;
     const payload = req.body;
 
     // Verify webhook signature
     if (!verifySignature(signature, payload)) {
-    res.status(401).json({ success: false, message: 'Invalid signature' });
-      return 
+      res.status(200).json({ success: false, message: 'Invalid signature' });
+      return;
     }
     console.log(payload);
     // Process webhook event
@@ -193,11 +193,12 @@ export const shiprocketWebhook = async (req: Request, res: Response): Promise<vo
         console.log('Unhandled webhook event:', payload.event);
     }
 
-    res.status(200).json({ success: true });
+    // Return only 200 status without body
+    res.sendStatus(200);
 
   } catch (error) {
     console.error('Webhook error:', error);
-    res.status(500).json({ success: false, message: 'Webhook processing failed' });
+    res.sendStatus(200);
   }
 };
 
