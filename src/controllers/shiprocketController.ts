@@ -177,7 +177,8 @@ export const shiprocketWebhook = async (req: Request, res: Response): Promise<vo
 
     // Verify webhook signature
     if (!verifySignature(signature, payload)) {
-      return res.status(401).json({ success: false, message: 'Invalid signature' });
+    res.status(401).json({ success: false, message: 'Invalid signature' });
+      return 
     }
     console.log(payload);
     // Process webhook event

@@ -191,8 +191,8 @@ class ShiprocketService {
   // Track shipment
   async trackShipment(shipmentId: number) {
     try {
-      const response = await this.apiClient.get(`/courier/track/${shipmentId}`);
-      return response.data;
+      return await this.apiClient.get(`/courier/track/awb/${shipmentId}`);
+     
     } catch (error) {
       this.handleError(error, 'trackShipment');
     }

@@ -94,8 +94,13 @@ app.get('/', (req: Request, res: Response) => {
 // }).catch((error) => {
 //   console.log(error);
 // });'
-// shiprocketService.trackShipment(800819084).then((response) => {
-//   console.log(response);
+// shiprocketService.generateManifest({shipment_ids: [800819084]}).then((response) => {
+//   console.log(response.data);
+// }).catch((error) => {
+//   console.log(error);
+// });
+// shiprocketService.trackShipment(19041733848613).then((response) => {
+//   console.log(response.data, response.data.tracking_data.shipment_track);
 // }).catch((error) => {
 //   console.log(error);
 // });
