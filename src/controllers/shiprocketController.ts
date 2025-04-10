@@ -170,7 +170,7 @@ export const generateManifest = async (req: Request, res: Response): Promise<voi
   }
 };
 
-export const shiprocketWebhook = async (req: Request, res: Response) => {
+export const shiprocketWebhook = async (req: Request, res: Response): Promise<void> => {
   try {
     const signature = req.headers['x-shiprocket-signature'] as string;
     const payload = req.body;
