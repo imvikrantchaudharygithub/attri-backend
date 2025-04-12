@@ -170,6 +170,26 @@ export const generateManifest = async (req: Request, res: Response): Promise<voi
   }
 };
 
+export const trackOrderByOrderId = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orderId, channelId } = req.body;
+
+    const response = await shiprocketService.trackOrderByOrderId(orderId, channelId);
+    res.json({
+      success: true,
+      message: 'Order tracked successfully',
+      data: response?.data
+    });
+  } catch (error:any) {
+    console.error('Track order by order ID error:', error); 
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to track order'
+    });
+  }
+};
+
+
 export const shiprocketWebhook = async (req: Request, res: Response): Promise<void> => {
   try {
     const signature = req.headers['x-api-key'] as string;

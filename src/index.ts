@@ -99,8 +99,8 @@ app.get('/', (req: Request, res: Response) => {
 // }).catch((error) => {
 //   console.log(error);
 // });
-// shiprocketService.trackShipment(19041733848613).then((response) => {
-//   console.log(response.data, response.data.tracking_data.shipment_track);
+// shiprocketService.trackOrderByOrderId("67f55d97c0edd3833351a806","").then((response) => {
+//   console.log(response.data,response?.data?.tracking_data?.shipment_track_activities);
 // }).catch((error) => {
 //   console.log(error);
 // });

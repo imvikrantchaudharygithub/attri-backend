@@ -210,6 +210,19 @@ class ShiprocketService {
     }
   }
 
+  async trackOrderByOrderId(orderId: string, channelId: string) {
+    try {
+      return await this.apiClient.get('/courier/track', {
+        params: {
+          order_id: orderId,
+          channel_id: channelId
+        }
+      });
+    } catch (error) {
+      this.handleError(error, 'trackOrderByOrderId');
+    }
+  }
+
   private handleError(error: any, context: string): never {
     const errorMessage = error.response?.data?.message || error.message;
     const errorDetails = error.response?.data?.errors || '';

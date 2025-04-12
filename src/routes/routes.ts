@@ -27,7 +27,7 @@ import { createRazorpayOrder, verifyPayment, distributeCommissionsManual, deduct
     import { addBankDetail, getBankDetails, updateBankDetail, deleteBankDetail, setDefaultAccount } from '../controllers/userBankController';
 import { withdrawalController } from '../controllers/withdrawalController';
 import { addWarehouse, getTrackingDetails, getShipmentDetails, manifestOrder, getCourierList } from '../controllers/deliveryController';
-import { addPickupAddress, generateManifest, shiprocketWebhook } from '../controllers/shiprocketController';
+import { addPickupAddress, generateManifest, shiprocketWebhook, trackOrderByOrderId } from '../controllers/shiprocketController';
 
 const router = express.Router();
 
@@ -173,5 +173,6 @@ router.get('/get-courier-list', getCourierList);
 // shiprocket routes
 router.post('/add-pickup-address', addPickupAddress);
 router.post('/generate-manifest', generateManifest);
-router.post('/shiprocket-webhook', shiprocketWebhook);
+router.post('/ordertrack-webhook', shiprocketWebhook);
+router.post('/track-order-by-order-id', trackOrderByOrderId);
 export default router;
