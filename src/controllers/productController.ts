@@ -19,7 +19,7 @@ type UploadFiles = {
 
 
 export const createProduct = async (req: Request, res: Response): Promise<void> => {
-    const { name, description, mrp, discount, stock, category, status, gallery, faqs, ingredients, info, tags } = req.body;
+    const { name,rating, description, mrp, discount, stock, category, status, gallery, faqs, ingredients, info, tags } = req.body;
 
     // Parse gallery, faqs, and tags if they're strings
     const parsedGallery = typeof gallery === "string" ? JSON.parse(gallery) : [];
@@ -151,6 +151,7 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
             stock,
             category: new mongoose.Types.ObjectId(category),
             images,
+            rating,
             gallery: galleryImages,
             ingredients: ingredientsData,
             status,

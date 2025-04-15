@@ -21,13 +21,13 @@ import {
 import { verifyToken } from '../middlewares/auth';
 import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems, increaseCartItemQuantity, decreaseCartItemQuantity} from '../controllers/cartController';
 // import { createRazorpayOrder,verifyPayment } from '../controllers/paymentController';
-import { createOrder,getAllOrders,getOrderById,getUserOrders, getUserRecentOrders} from '../controllers/orderController';
+import { createOrder,deleteOrder,getAllOrders,getOrderById,getUserOrders, getUserRecentOrders} from '../controllers/orderController';
 import { createRazorpayOrder, verifyPayment, distributeCommissionsManual, deductUserBalance } from '../controllers/paymentController';
 // import { authenticate } from '../middlewares/authentication';
     import { addBankDetail, getBankDetails, updateBankDetail, deleteBankDetail, setDefaultAccount } from '../controllers/userBankController';
 import { withdrawalController } from '../controllers/withdrawalController';
 import { addWarehouse, getTrackingDetails, getShipmentDetails, manifestOrder, getCourierList } from '../controllers/deliveryController';
-import { addPickupAddress, generateManifest, shiprocketWebhook, trackOrderByOrderId } from '../controllers/shiprocketController';
+import { addPickupAddress, generateManifest, shiprocketWebhook, trackOrderByOrderId, getcheckServiceability, assignAWB, generateLabel, generatePickup } from '../controllers/shiprocketController';
 
 const router = express.Router();
 
@@ -133,6 +133,7 @@ router.get('/get-order/:id', verifyToken, getOrderById);
 router.get('/get-user-orders/:userId', verifyToken, getUserOrders);
 router.get('/get-user-recent-orders/:userId', verifyToken, getUserRecentOrders);
 router.get('/get-all-orders', getAllOrders);
+router.post('/delete-order', deleteOrder);
 // router.post('/update-order-status', verifyToken, updateOrderStatus);
 
 router.post('/create-razorpay-order', verifyToken, createRazorpayOrder);
@@ -173,6 +174,11 @@ router.get('/get-courier-list', getCourierList);
 // shiprocket routes
 router.post('/add-pickup-address', addPickupAddress);
 router.post('/generate-manifest', generateManifest);
+router.post('/generate-label', generateLabel);
 router.post('/ordertrack-webhook', shiprocketWebhook);
 router.post('/track-order-by-order-id', trackOrderByOrderId);
+router.post('/check-serviceability', getcheckServiceability);
+router.post('/assign-awb', assignAWB);
+router.post('/generate-pickup', generatePickup);
+
 export default router;

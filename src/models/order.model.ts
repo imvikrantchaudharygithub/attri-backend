@@ -16,6 +16,14 @@ const orderSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  tracking_orderid: {
+    type: String,
+    default: null
+  },
+  manifest_url: {
+    type: String,
+    default: null
+  },
   products: [{
     product: {
       type: mongoose.Schema.Types.ObjectId,
@@ -34,7 +42,7 @@ const orderSchema = new mongoose.Schema({
   }],
   status: {
     type: String,
-    enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled'],
+    enum: ['pending', 'processing', 'confirmed', 'shipped', 'delivered', 'cancelled'],
     default: 'pending'
   },
   // payment: {

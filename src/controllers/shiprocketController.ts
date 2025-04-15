@@ -22,7 +22,7 @@ export const createShiprocketOrder = async (orderId:string): Promise<any> => {
       order_date: order.createdAt.toISOString(),
       channel_id: "WEB",
       pickup_location: "Primary Warehouse",
-      billing_customer_name: order.user.username || "Customer Name",
+      billing_customer_name: order?.user?.username || "",
       billing_last_name: "",
       billing_address: order.address.street,
       billing_address_2: order.address.landmark || "",
@@ -30,7 +30,7 @@ export const createShiprocketOrder = async (orderId:string): Promise<any> => {
       billing_pincode: order.address.pincode.toString(),
       billing_state: order.address.state,
       billing_country: "India",
-      billing_email: order.user.email || "no-reply@example.com",
+      billing_email: order.user.email || "",
       billing_phone: `91${order.address.contact}`.replace(/\D/g, "").slice(0, 12),
       shipping_is_billing: true,
       order_items: order.products.map((item: any) => ({
@@ -60,6 +60,7 @@ export const createShiprocketOrder = async (orderId:string): Promise<any> => {
     // Update local order with tracking info
     if (response.data && response.data.shipment_id) {
       order.tracking_number = response?.data?.shipment_id.toString();
+      order.tracking_orderid = response?.data?.order_id.toString();
       await order.save();
     }
     console.log(response?.data);
@@ -148,17 +149,20 @@ export const generateManifest = async (req: Request, res: Response): Promise<voi
       return;
     }
 
-    const response = await shiprocketService.generateManifest({
+    const response:any = await shiprocketService.generateManifest({
       shipment_ids: shipmentIds.map(id => Number(id))
     });
+
+    // Update orders with manifest URL using tracking_number (shipmentIds)
+    await Order.updateMany(
+      { tracking_number: { $in: shipmentIds } },
+      { $set: { manifest_url: response.data.manifest_url } }
+    );
 
     res.json({
       success: true,
       message: 'Manifest generated successfully',
-      data: {
-        manifest_url: response?.data?.manifest_url,
-        shipment_ids: response?.data?.shipment_ids
-      }
+      data: response
     });
 
   } catch (error:any) {
@@ -166,6 +170,175 @@ export const generateManifest = async (req: Request, res: Response): Promise<voi
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to generate manifest'
+    });
+  }
+};
+
+export const generateLabel = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { shipmentIds } = req.body;
+
+    if (!shipmentIds?.length || !Array.isArray(shipmentIds)) {  
+      res.json({
+        success: false,
+        message: 'At least one valid shipment ID is required'
+      });
+      return;
+    }   
+
+    const response = await shiprocketService.generateLabel({
+      shipment_ids: shipmentIds.map(id => Number(id))
+    });
+
+    res.json({
+      success: true,
+      message: 'Label generated successfully',
+      data: response
+    });
+
+  } catch (error:any) { 
+    console.error('Label generation error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to generate label'
+    });
+  }
+};
+
+  
+export const getcheckServiceability = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { pickupPostcode, deliveryPostcode, weight, orderId } = req.body;
+    console.log(req.body);
+
+    const response = await shiprocketService.checkServiceability({  
+         pickup_postcode: pickupPostcode,
+         delivery_postcode: deliveryPostcode,
+         weight: weight,
+         order_id: orderId
+    });
+    res.json({
+      success: true,
+      message: 'Serviceability checked successfully',
+      data: response?.data
+    });
+  } catch (error:any) { 
+    console.error('Serviceability check error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to check serviceability'
+    });
+  }
+};  
+
+
+export const assignAWB = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { shipmentIds, courierId } = req.body;
+
+    const response = await shiprocketService.assignAWB({    
+      shipment_ids: shipmentIds.map((id:any) => Number(id)),
+      courier_id: Number(courierId)
+    });
+
+    // Update order status to confirmed using tracking_number
+    await Order.updateMany(
+      { tracking_number: { $in: shipmentIds } },
+      { $set: { status: 'confirmed' } }
+    );
+
+    res.json({
+      success: true,
+      message: 'AWB assigned successfully and order status updated',
+      data: response?.data
+    });
+  } catch (error:any) {
+    console.error('AWB assignment error:', error);  
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to assign AWB'
+    });
+  }
+};
+
+
+export const generatePickup = async (req: Request, res: Response): Promise<void> => {
+  try {
+    // Destructure using snake_case to match payload
+    const { 
+      shipmentIds,
+      pickup_date: pickupDate,  // Map payload's pickup_date to pickupDate
+      pickup_time: pickupTime   // Map payload's pickup_time to pickupTime
+    } = req.body;
+
+    // Validate time format
+    const timeFormatRegex = /^(0?[0-9]|1[0-9]|2[0-3]):([0-5][0-9])$/;
+    if (!pickupTime?.from || !timeFormatRegex.test(pickupTime.from) ||
+        !pickupTime?.to || !timeFormatRegex.test(pickupTime.to)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid time format. Use HH:MM 24-hour format (e.g. "09:00" or "14:30")'
+      });
+      return;
+    }
+
+    // Validate date format (YYYY-MM-DD)
+    const dateFormatRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!dateFormatRegex.test(pickupDate)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid date format. Use YYYY-MM-DD'
+      });
+      return;
+    }
+
+    // Convert and validate shipment IDs
+    const numericShipmentIds = shipmentIds
+      .map((id:any) => Number(id))
+      .filter((id:any) => !isNaN(id) && id > 0);
+
+    if (numericShipmentIds.length === 0) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid shipment ID format'
+      });
+      return;
+    }
+
+    // Validate time window
+    const [fromHours, fromMinutes] = pickupTime.from.split(':').map(Number);
+    const [toHours, toMinutes] = pickupTime.to.split(':').map(Number);
+    const totalFrom = fromHours * 60 + fromMinutes;
+    const totalTo = toHours * 60 + toMinutes;
+    
+    if (totalTo <= totalFrom) {
+      res.status(400).json({
+        success: false,
+        message: 'Pickup end time must be after start time'
+      });
+      return;
+    }
+
+    const response = await shiprocketService.generatePickup({
+      shipment_id: numericShipmentIds,
+      pickup_date: pickupDate,
+      pickup_time: {
+        from: pickupTime.from,
+        to: pickupTime.to
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Pickup generated successfully',
+      data: response
+    });
+
+  } catch (error: any) {
+    console.error('Pickup generation error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to generate pickup'
     });
   }
 };
@@ -202,16 +375,10 @@ export const shiprocketWebhook = async (req: Request, res: Response): Promise<vo
     }
     console.log(payload);
     // Process webhook event
-    switch(payload.event) {
-      case 'tracking':
-        await handleTrackingUpdate(payload.data);
-        break;
-      case 'order_status':
-        await handleOrderStatusUpdate(payload.data);
-        break;
-      default:
-        console.log('Unhandled webhook event:', payload.event);
-    }
+    await Order.updateOne(
+        { _id: payload.order_id },
+        { $set: { status: payload.current_status.toLowerCase() } }
+      );
 
     // Return only 200 status without body
     res.sendStatus(200);

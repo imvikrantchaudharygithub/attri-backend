@@ -43,9 +43,21 @@ type ServiceabilityPayload = {
   delivery_postcode: string;
   weight: number;
   cod?: 0 | 1;
-  length?: number;
-  breadth?: number;
-  height?: number;
+  order_id?: string;
+};
+
+type ServiceabilityResponse = {
+  status: number;
+  data: {
+    available_courier_companies: Array<{
+      courier_company_id: number;
+      courier_name: string;
+      estd_delivery_days: string;
+      rate: number;
+    }>;
+    is_recommended: boolean;
+    recommended_by: string | null;
+  };
 };
 
 type CreatePickupPayload = {
@@ -57,6 +69,12 @@ type CreatePickupPayload = {
 type GenerateLabelPayload = {
   shipment_ids: number[];
   format?: 'pdf' | 'zpl' | 'epson';
+};
+
+type LabelGenerationResponse = {
+  status: number;
+  label_url: string;
+  shipment_id: string;
 };
 
 type ShiprocketPickupAddressPayload = {
@@ -77,6 +95,34 @@ type ShiprocketPickupAddressPayload = {
     shipment_ids: number[];
     format?: 'pdf' | 'csv' | 'xls';
   };
+
+type AssignAwbPayload = {
+  shipment_ids: number[];
+  courier_id: number;
+  is_manual?: boolean;
+};
+
+type GeneratePickupPayload = {
+  shipment_id: number[];
+  pickup_date: string;
+  pickup_time: {
+    from: string;
+    to: string;
+  };
+};
+
+type GeneratePickupResponse = {
+  status: number;
+  pickup_id: number;
+  message: string;
+  scheduled_date: string;
+};
+
+type GenerateManifestResponse = {
+  status: number;
+  manifest_url: string;
+  manifest_date: string;
+};
 
 class ShiprocketService {
   private authClient: AxiosInstance;
@@ -126,15 +172,29 @@ class ShiprocketService {
     }
   }
 
-  async generateManifest(payload: GenerateManifestPayload) {
+  async generateManifest(payload: GenerateManifestPayload): Promise<GenerateManifestResponse> {
     try {
-      return await this.apiClient.post('/manifests/generate', {
-        format: 'pdf',
+      if (!payload.shipment_ids?.length) {
+        throw new Error('At least one shipment ID is required');
+      }
+
+      const formattedPayload = {
+        format: 'pdf', // default format
+        shipment_id: payload.shipment_ids.join(','), // convert array to comma-separated string
         ...payload
-      });
-     
+      };
+
+      const response = await this.apiClient.post('/manifests/generate', formattedPayload);
+      
+      return {
+        status: response.status,
+        manifest_url: response.data.manifest_url,
+        manifest_date: response.data.manifest_date
+      };
     } catch (error) {
-      this.handleError(error, 'generateManifest');
+      this.handleError(error, 'generateManifest', {
+        payload
+      });
     }
   }
   // Create new order
@@ -153,28 +213,50 @@ class ShiprocketService {
   }
 
   // Check shipping rates
-  async checkServiceability(payload: ServiceabilityPayload) {
+  async checkServiceability(payload: ServiceabilityPayload): Promise<any> {
     try {
-      const response = await this.apiClient.post('/courier/serviceability', {
+      // Convert weight to Shiprocket's required format (grams)
+      const formattedPayload = {
         ...payload,
-        cod: payload.cod || 0
+        weight: Math.round(payload.weight * 1000), // Convert kg to grams
+        pickup_postcode: payload.pickup_postcode.toString(),
+        delivery_postcode: payload.delivery_postcode.toString()
+      };
+
+      const response = await this.apiClient.get('/courier/serviceability', {
+        params: {
+          cod: 0,  // default to prepaid
+          ...formattedPayload,
+          order_id: payload.order_id // Maintain snake_case naming
+        }
       });
-      return response.data;
+
+      return response;
     } catch (error) {
       this.handleError(error, 'checkServiceability');
     }
   }
 
   // Generate shipping label
-  async generateLabel(payload: GenerateLabelPayload) {
+  async generateLabel(payload: GenerateLabelPayload): Promise<any> {
     try {
-      const response = await this.apiClient.post('/courier/generate/label', {
-        format: 'pdf',
+      if (!payload.shipment_ids?.length) {
+        throw new Error('At least one shipment ID is required');
+      }
+
+      const formattedPayload: any = {
+        format: 'pdf', // default format
+        shipment_id: payload.shipment_ids.join(','), // convert array to comma-separated string
         ...payload
-      });
+      };
+
+      const response = await this.apiClient.post('/courier/generate/label', formattedPayload);
+      console.log(response.data);
       return response.data;
     } catch (error) {
-      this.handleError(error, 'generateLabel');
+      this.handleError(error, 'generateLabel', {
+        payload
+      });
     }
   }
 
@@ -223,9 +305,73 @@ class ShiprocketService {
     }
   }
 
-  private handleError(error: any, context: string): never {
-    const errorMessage = error.response?.data?.message || error.message;
-    const errorDetails = error.response?.data?.errors || '';
+  async assignAWB(payload: AssignAwbPayload) {
+    try {
+      // Validate required fields
+      if (!payload.shipment_ids?.length || !payload.courier_id) {
+        throw new Error('Missing required fields: shipment_ids or courier_id');
+      }
+
+      // Convert to Shiprocket's expected format
+      const formattedPayload = {
+        shipment_id: payload.shipment_ids.join(','), // Convert array to comma-separated string
+        courier_id: payload.courier_id, // Keep as number
+        is_manual: payload.is_manual ? 1 : 0 // Convert boolean to 1/0
+      };
+
+      // Validate payload
+      if (formattedPayload.courier_id <= 0) {
+        throw new Error('Invalid courier_id');
+      }
+
+      const response = await this.apiClient.post('/courier/assign/awb', formattedPayload);
+      return response;
+    } catch (error) {
+      this.handleError(error, 'assignAWB');
+    }
+  }
+
+  async generatePickup(payload: GeneratePickupPayload): Promise<any> {
+    try {
+      // Validate required fields
+      if (!payload.shipment_id?.length) {
+        throw new Error('At least one shipment ID is required');
+      }
+      if (!payload.pickup_date || !payload.pickup_time?.from || !payload.pickup_time?.to) {
+        throw new Error('Pickup date and time window are required');
+      }
+
+      const response = await this.apiClient.post('/courier/generate/pickup', {
+        ...payload,
+        pickup_date: new Date(payload.pickup_date).toISOString().split('T')[0] // Format as YYYY-MM-DD
+      });
+      return response.data;
+
+    //   return {
+    //     status: response.status,
+    //     pickup_id: response.data.pickup_id,
+    //     message: response.data.message,
+    //     scheduled_date: response.data.scheduled_date
+    //   };
+    } catch (error) {
+      this.handleError(error, 'generatePickup', {
+        payload,
+        formattedDate: new Date(payload.pickup_date).toISOString().split('T')[0]
+      });
+    }
+  }
+
+  private handleError(error: any, context: string, additionalInfo?: any): never {
+    // Handle PHP errors from Shiprocket API
+    const rawError = error.response?.data;
+    const errorMessage = typeof rawError === 'object' 
+      ? rawError?.message || error.message
+      : rawError || error.message;
+
+    const errorDetails = typeof rawError === 'object'
+      ? rawError?.errors || ''
+      : `Raw API response: ${rawError}`;
+
     throw new Error(`Shiprocket ${context} failed: ${errorMessage} ${errorDetails}`);
   }
 }

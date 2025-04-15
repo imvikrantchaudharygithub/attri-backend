@@ -148,8 +148,9 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
 
 // Delete order
 export const deleteOrder = async (req: Request, res: Response) => {
+  const {orderId} = req.body;
   try {
-    const order = await Order.findByIdAndDelete(req.params.id);
+    const order = await Order.findByIdAndDelete(orderId);
 
     if (!order) {
         res.status(404).json({ message: 'Order not found' });
@@ -166,11 +167,18 @@ export const deleteOrder = async (req: Request, res: Response) => {
 export const getUserOrders = async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.params;
+
+    const result = await Order.deleteMany({
+      user: userId,
+      status: 'pending'
+    });
     
     const orders = await Order.find({ user: userId })
       .populate('user', 'name email')
       .populate('address')
       .populate('products.product', 'name price images mrp discount');
+
+
       
     res.json(orders);
   } catch (error) {

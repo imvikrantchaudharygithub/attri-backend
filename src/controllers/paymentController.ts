@@ -22,8 +22,9 @@ export const createRazorpayOrder = async (req: Request, res: Response) => {
         }
 
         // Create Razorpay order
+        const shippingAmount = order.totalAmount > 699 ? 0 : 55;
         const razorpayOrder = await razorpayService.createOrder(
-            order.totalAmount,
+            order.totalAmount + shippingAmount,
             'INR',
             `order_${order._id}`
         );
