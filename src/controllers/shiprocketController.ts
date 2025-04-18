@@ -8,7 +8,7 @@ export const createShiprocketOrder = async (orderId:string): Promise<any> => {
 
     // Get order from database
     const order:any = await Order.findById(orderId)
-      .populate('user', 'name email phone')
+      .populate('user', 'username email phone')
       .populate('address')
       .populate('products.product', 'name sku weight dimensions price');
       
@@ -22,7 +22,7 @@ export const createShiprocketOrder = async (orderId:string): Promise<any> => {
       order_date: order.createdAt.toISOString(),
       channel_id: "WEB",
       pickup_location: "Primary Warehouse",
-      billing_customer_name: order?.user?.username || "",
+      billing_customer_name: order?.user?.username ,
       billing_last_name: "",
       billing_address: order.address.street,
       billing_address_2: order.address.landmark || "",
@@ -141,33 +141,64 @@ export const generateManifest = async (req: Request, res: Response): Promise<voi
   try {
     const { shipmentIds } = req.body;
 
+    // Validate input
     if (!shipmentIds?.length || !Array.isArray(shipmentIds)) {
-      res.json({
+      res.status(400).json({
         success: false,
         message: 'At least one valid shipment ID is required'
       });
       return;
     }
 
-    const response:any = await shiprocketService.generateManifest({
+    // Convert to strings for DB query
+    const stringIds = shipmentIds.map(String);
+
+    // Check for existing manifests and valid tracking numbers
+    const orders = await Order.find({ tracking_number: { $in: stringIds } });
+    
+    const invalidOrders = orders.filter(order => 
+      !order.tracking_number || order.manifest_url
+    );
+
+    if (invalidOrders.length > 0) {
+      const errors = invalidOrders.map(order => ({
+        trackingNumber: order.tracking_number,
+        issue: !order.tracking_number ? 'Missing tracking number' : 'Existing manifest'
+      }));
+      
+      
+      res.status(400).json({
+        success: false,
+        message: 'Invalid orders found',
+        errors
+      });
+      return;
+    }
+
+    // Generate manifest with Shiprocket
+    const response = await shiprocketService.generateManifest({
       shipment_ids: shipmentIds.map(id => Number(id))
     });
 
-    // Update orders with manifest URL using tracking_number (shipmentIds)
+    // Update orders with manifest URL from response
     await Order.updateMany(
-      { tracking_number: { $in: shipmentIds } },
-      { $set: { manifest_url: response.data.manifest_url } }
+      { tracking_number: { $in: stringIds } },
+      { $set: { manifest_url: response.manifest_url } }
     );
 
     res.json({
       success: true,
       message: 'Manifest generated successfully',
-      data: response
+      data: {
+        manifest_url: response.manifest_url,
+        updated_count: orders.length
+      }
     });
 
-  } catch (error:any) {
+  } catch (error: any) {
     console.error('Manifest generation error:', error);
-    res.status(500).json({
+    const statusCode = error.message.includes('already exists') ? 409 : 500;
+    res.status(statusCode).json({
       success: false,
       message: error.message || 'Failed to generate manifest'
     });
@@ -379,7 +410,7 @@ export const shiprocketWebhook = async (req: Request, res: Response): Promise<vo
         { _id: payload.order_id },
         { $set: { status: payload.current_status.toLowerCase() } }
       );
-
+    
     // Return only 200 status without body
     res.sendStatus(200);
 
@@ -401,4 +432,58 @@ const handleTrackingUpdate = async (data: any) => {
 
 const handleOrderStatusUpdate = async (data: any) => {
   // Update order status in your database
+};
+
+export const printManifest = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { shipmentIds, format = 'pdf' } = req.body;
+
+    // Validate input
+    if (!shipmentIds?.length || !Array.isArray(shipmentIds)) {
+      res.status(400).json({
+        success: false,
+        message: 'At least one valid shipment ID is required'
+      });
+      return;
+    }
+
+    // Convert to strings for DB query
+    const stringIds = shipmentIds.map(String);
+
+    // Check for existing manifests in database
+    const invalidShipments = await Order.find({
+      tracking_number: { $in: stringIds },
+      manifest_url: { $exists: false }
+    });
+
+    if (invalidShipments.length > 0) {
+      const missingIds = invalidShipments.map(s => s.tracking_number);
+      res.status(400).json({
+        success: false,
+        message: 'Manifest not generated for these shipments',
+        missingShipments: missingIds
+      });
+      return;
+    }
+
+    // Call Shiprocket service
+    const response = await shiprocketService.printManifest({
+      shipment_ids: shipmentIds.map(id => Number(id)),
+      format: format as 'pdf' | 'csv'
+    });
+
+    res.json({
+      success: true,
+      message: 'Manifest printed successfully',
+      data: response
+    });
+
+  } catch (error: any) {
+    console.error('Manifest print error:', error);
+    const statusCode = error.message.includes('No manifest exists') ? 400 : 500;
+    res.status(statusCode).json({
+      success: false,
+      message: error.message || 'Failed to print manifest'
+    });
+  }
 };

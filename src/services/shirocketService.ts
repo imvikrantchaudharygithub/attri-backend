@@ -1,4 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
+import Order from '../models/order.model';
 
 type ShiprocketAuthResponse = {
   token: string;
@@ -172,34 +173,45 @@ class ShiprocketService {
     }
   }
 
-  async generateManifest(payload: GenerateManifestPayload): Promise<GenerateManifestResponse> {
+  async generateManifest(payload: { shipment_ids: number[] }) {
     try {
-      if (!payload.shipment_ids?.length) {
-        throw new Error('At least one shipment ID is required');
+      // Check existing manifests first
+      const ordersWithManifest = await Order.find({ 
+        tracking_number: { $in: payload.shipment_ids.map(String) },
+        manifest_url: { $exists: true, $ne: null }
+      });
+
+      if (ordersWithManifest.length > 0) {
+        const existingIds = ordersWithManifest.map(o => o.tracking_number);
+        throw new Error(`Manifest already exists for shipments: ${existingIds.join(', ')}`);
       }
 
-      const formattedPayload = {
-        format: 'pdf', // default format
-        shipment_id: payload.shipment_ids.join(','), // convert array to comma-separated string
-        ...payload
-      };
-
-      const response = await this.apiClient.post('/manifests/generate', formattedPayload);
-      
-      return {
-        status: response.status,
-        manifest_url: response.data.manifest_url,
-        manifest_date: response.data.manifest_date
-      };
-    } catch (error) {
-      this.handleError(error, 'generateManifest', {
-        payload
+      const response = await this.apiClient.post('/manifests/generate', {
+        shipment_ids: payload.shipment_ids
       });
+
+      return response.data;
+      
+    } catch (error: any) {
+      let errorMessage = 'Failed to generate manifest';
+      
+      // Handle specific Shiprocket error
+      if (error.response?.data?.message.includes('already generated')) {
+        errorMessage = `Manifest already exists for these shipments: ${payload.shipment_ids.join(', ')}`;
+      }
+      
+      throw new Error(errorMessage);
     }
   }
   // Create new order
   async createOrder(payload: ShiprocketOrderPayload) {
     try {
+      // Validate unique SKUs
+      const skus = payload.order_items.map(item => item.sku);
+      if (new Set(skus).size !== skus.length) {
+        throw new Error('Duplicate SKUs found in order items. All SKUs must be unique.');
+      }
+
       const fullPayload = {
         ...payload,
         shipping_is_billing: payload.shipping_is_billing ?? true,
@@ -358,6 +370,26 @@ class ShiprocketService {
         payload,
         formattedDate: new Date(payload.pickup_date).toISOString().split('T')[0]
       });
+    }
+  }
+
+  async printManifest(payload: { shipment_ids: number[]; format?: 'pdf' | 'csv' }) {
+    try {
+      const response = await this.apiClient.post('/manifests/print', {
+        shipment_ids: payload.shipment_ids,
+        format: payload.format || 'pdf'
+      });
+
+      return response.data;
+      
+    } catch (error: any) {
+      let errorMessage = 'Failed to print manifest';
+      
+      if (error.response?.data?.message?.includes('No manifest found')) {
+        errorMessage = `No manifest exists for shipments: ${payload.shipment_ids.join(', ')}`;
+      }
+      
+      throw new Error(errorMessage);
     }
   }
 

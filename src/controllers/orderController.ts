@@ -88,7 +88,7 @@ export const getAllOrders = async (req: Request, res: Response) => {
     const orders = await Order.find()
       .populate('user', 'username phone')
       .populate('address')
-      .populate('products.product', 'name price images');
+      .populate('products.product', 'name price images sku');
       
     res.json(orders);
   } catch (error) {

@@ -37,6 +37,19 @@ const ProductSchema: Schema = new Schema(
         title: { type: String, required: true },
         description: { type: String, required: true },
       },],
+    sku: {
+      type: String,
+      required: true,
+      unique: true,
+      default: function() {
+        // Auto-generate SKU if not provided
+        const prod = this as any;
+        const categoryCode = prod.category?.toString().slice(-4).toUpperCase() || 'GEN';
+        const slugPart = prod.slug?.toUpperCase().slice(0, 8) || 'PROD';
+        const uniqueId = prod._id.toString().slice(-6).toUpperCase();
+        return `${categoryCode}-${slugPart}-${uniqueId}`;
+      }
+    },
   },
   { timestamps: true }
 );
@@ -44,11 +57,27 @@ const ProductSchema: Schema = new Schema(
 // ✅ Generate slug before saving
 // **Middleware to generate slug before saving**
 ProductSchema.pre('save', function (next) {
-    if (this.name) {
-      this.slug = slugify(this.name.toString(), { lower: true, strict: true });
-    }
-    next();
-  });
+  const product = this as any;
+  
+  // Generate slug if name is modified
+  if (product.isModified('name')) {
+    product.slug = slugify(product.name.toString(), { 
+      lower: true,
+      strict: true,
+      replacement: '-'
+    });
+  }
+
+  // Generate SKU if not provided
+  if (!product.sku) {
+    const categoryCode = product.category?.toString().slice(-4).toUpperCase() || 'GEN';
+    const slugPart = product.slug?.toUpperCase().slice(0, 8) || 'PROD';
+    const uniqueId = product._id.toString().slice(-6).toUpperCase();
+    product.sku = `${categoryCode}-${slugPart}-${uniqueId}`;
+  }
+  
+  next();
+});
 
 const Product = mongoose.model('Product', ProductSchema);
 
