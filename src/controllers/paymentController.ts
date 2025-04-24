@@ -7,38 +7,46 @@ import User from '../models/user.model';
 import { distributeCommissions } from '../services/priceDistribution';
 // import { createSingleOrderShipment } from '../controllers/deliveryController';
 import { createShiprocketOrder } from '../controllers/shiprocketController';
-export const createRazorpayOrder = async (req: Request, res: Response) => {
+import mongoose from 'mongoose';
+
+export const createRazorpayOrder = async (req: Request, res: Response): Promise<void> => {
     try {
         const { orderId } = req.body;
         
-        // Validate order exists
-        const order = await Order.findById(orderId)
-            .populate('user', 'email name')
-            .populate('products.product');
-        
-        if (!order) {
-            res.status(404).json({ message: 'Order not found' });
-            return 
+        // Validate order ID
+        if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+            res.status(400).json({ message: 'Invalid order ID' });
+            return;
         }
 
+        // Fetch order details
+        const order = await Order.findById(orderId);
+        if (!order) {
+            res.status(404).json({ message: 'Order not found' });
+            return;
+        }
+        const shippingAmount = order.totalAmount > 699 ? 0: 55;
+        const totalAmount = order.totalAmount + shippingAmount;
         // Create Razorpay order
-        const shippingAmount = order.totalAmount > 699 ? 0 : 55;
-        const razorpayOrder = await razorpayService.createOrder(
-            order.totalAmount + shippingAmount,
-            'INR',
-            `order_${order._id}`
-        );
+        const razorpayOrder = await razorpayService.createOrder({
+            amount: totalAmount * 100, // Convert to paise
+            currency: 'INR',
+            receipt: order._id.toString(),
+            notes: {
+                internalOrderId: order._id.toString()
+            }
+        });
 
         res.status(200).json({
-            message: 'Razorpay order created',
-            order: razorpayOrder,
+            id: razorpayOrder.id,
+            amount: razorpayOrder.amount,
+            currency: razorpayOrder.currency,
             key: process.env.RAZORPAY_KEY_ID
         });
 
     } catch (error: any) {
-        console.error('Payment error:', error);
-        res.status(500).json({
-            message: 'Failed to create payment order',
+        res.status(400).json({
+            message: 'Payment initiation failed',
             error: error.message
         });
     }

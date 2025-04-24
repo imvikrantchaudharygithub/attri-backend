@@ -1,34 +1,51 @@
 import Razorpay from 'razorpay';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+
+// Load environment variables first
 dotenv.config();
 
+interface RazorpayOrderParams {
+    amount: number;
+    currency: string;
+    receipt: string;
+    notes?: Record<string, string>;
+    payment_capture?: number;
+}
+
 class RazorpayService {
-    private razorpay: Razorpay;
+    private instance: Razorpay;
 
     constructor() {
-        // if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
+        // Validate environment variables
+        // if (!process.env.RAZORPAY_KEY_ID  || !process.env.RAZORPAY_KEY_SECRET) {
         //     throw new Error('Razorpay credentials not configured');
         // }
 
-        this.razorpay = new Razorpay({
-            key_id: process.env.RAZORPAY_KEY_ID || 'rzp_test_YaVIcCUvop1Y5l',
-            key_secret: process.env.RAZORPAY_KEY_SECRET || 'c6Z7JC19C6ullu2Fb1aD10hM'
+        this.instance = new Razorpay({
+            key_id: process.env.RAZORPAY_KEY_ID || 'rzp_live_LGvyxYF9hEcSdM',
+            key_secret: process.env.RAZORPAY_KEY_SECRET || 'Bl2FYYZMy4fNHSDd67eK0Iu6'
         });
     }
 
-    async createOrder(amount: number, currency: string = 'INR', receipt?: string) {
+    async createOrder(params: {
+        amount: number;
+        currency: string;
+        receipt: string;
+        notes?: Record<string, string>;
+        payment_capture?: number;
+    }) {
         try {
-            const options = {
-                amount: amount * 100, // Convert to paise
-                currency,
-                receipt: receipt || `receipt_${Date.now()}`,
-                payment_capture: 1
-            };
-
-            return await this.razorpay.orders.create(options);
-        } catch (error) {
-            throw new Error(`Failed to create Razorpay order: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            return await this.instance.orders.create({
+                amount: params.amount,
+                currency: params.currency,
+                receipt: params.receipt,
+                notes: params.notes,
+                payment_capture: true // Auto-capture payments
+            });
+        } catch (error: any) {
+            console.error('Razorpay API Error:', error.error);
+            throw new Error(`Payment failed: ${error.error.description}`);
         }
     }
 
@@ -53,7 +70,7 @@ class RazorpayService {
                 throw new Error('Invalid payment signature');
             }
             
-            return await this.razorpay.payments.fetch(razorpayPaymentId);
+            return await this.instance.payments.fetch(razorpayPaymentId);
         } catch (error) {
             if (error instanceof Error && error.message === 'Invalid payment signature') {
                 throw error;
@@ -70,7 +87,7 @@ class RazorpayService {
 
     async capturePayment(paymentId: string, amount: number) {
         try {
-            return await this.razorpay.payments.capture(
+            return await this.instance.payments.capture(
                 paymentId,
                 amount * 100, // Convert to paise
                 'INR'
@@ -86,5 +103,5 @@ class RazorpayService {
     }
 }
 
-// Export a singleton instance
+// Export singleton after ensuring env vars are loaded
 export const razorpayService = new RazorpayService(); 
