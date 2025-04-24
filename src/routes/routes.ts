@@ -114,7 +114,7 @@ router.post('/add-address', createAddress); // Create new address
 router.get('/users/:userId/addresses', getUserAddresses); // Get all addresses for user
 router.get('/addresses/:id', getAddressById); // Get single address
 router.put('/addresses/:id', updateAddress); // Update address
-router.delete('/addresses/:id', deleteAddress); // Delete address
+router.post('/delete-address', deleteAddress); // Delete address
 router.post('/addresses/:addressId/default',verifyToken, setDefaultAddress);
 
 // cart routes

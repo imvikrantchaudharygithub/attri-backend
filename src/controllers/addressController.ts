@@ -20,28 +20,56 @@ export const createAddress = async (req: Request, res: Response): Promise<void> 
       return;
     }
     
-    // Destructure without userId to avoid duplicates
-    const { isDefault, userId: bodyUserId, ...addressData } = req.body;
+    // Destructure with default value for isDefault
+    const { isDefault = true, userId: bodyUserId, ...addressData } = req.body;
 
-    // Create address with user reference
-    const newAddress = await Address.create({
-      ...addressData,
-      userId: userId, // Use the validated userId
-      isDefault: isDefault || false
-    });
+    // Create transaction to ensure data consistency
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    
+    try {
+      // If new address is default, reset others
+      if (isDefault) {
+        await Address.updateMany(
+          { userId: userId },
+          { $set: { isDefault: false } },
+          { session }
+        );
+      }
 
-    // Update user's addresses array
-    await User.findByIdAndUpdate(userId, {
-      $push: { addresses: newAddress._id }
-    });
+      // Create new address
+      const newAddress = await Address.create([{
+        ...addressData,
+        userId: userId,
+        isDefault
+      }], { session });
 
-    res.status(200).json({ message: "Address added successfully", address: newAddress });
-  } catch (error:any) {
+      // Update user's addresses array
+      await User.findByIdAndUpdate(
+        userId,
+        { $push: { addresses: newAddress[0]._id } },
+        { session }
+      );
+
+      await session.commitTransaction();
+      
+      res.status(200).json({ 
+        message: "Address added successfully",
+        address: newAddress[0],
+        setAsDefault: isDefault
+      });
+
+    } catch (error: any) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
+    }
+
+  } catch (error: any) {
     console.error("Error adding address:", error);
     if (error.name === 'ValidationError') {
       res.status(400).json({ message: "Validation error", error: error.message });
-    } else if (error.code === 11000) {
-      res.status(400).json({ message: "Only one default address allowed" });
     } else {
       res.status(500).json({ message: "Internal server error" });
     }
@@ -109,7 +137,7 @@ export const updateAddress = async (req: Request, res: Response): Promise<void> 
 // ➤ Delete an address
 export const deleteAddress = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.body;
 
     const deletedAddress = await Address.findByIdAndDelete(id);
 
