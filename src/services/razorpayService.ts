@@ -51,37 +51,45 @@ class RazorpayService {
 
     async verifyPayment(razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string) {
         try {
-            // The exact format Razorpay expects: orderId + "|" + paymentId
-            const body = razorpayOrderId + "|" + razorpayPaymentId;
-            
-            // Generate expected signature using the KEY_SECRET directly from env
+            // Validate input parameters
+            if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
+                throw new Error('Missing payment verification parameters');
+            }
+
+            // Generate expected signature
+            const body = `${razorpayOrderId}|${razorpayPaymentId}`;
             const expectedSignature = crypto
-                .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'c6Z7JC19C6ullu2Fb1aD10hM')
+                .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || 'Bl2FYYZMy4fNHSDd67eK0Iu6')
                 .update(body)
                 .digest('hex');
-            
-            // Compare using timing-safe comparison
+
+            // Compare signatures safely
             const isValid = crypto.timingSafeEqual(
-                Buffer.from(expectedSignature, 'hex'),
-                Buffer.from(razorpaySignature, 'hex')
+                Buffer.from(expectedSignature),
+                Buffer.from(razorpaySignature)
             );
-            
+
             if (!isValid) {
                 throw new Error('Invalid payment signature');
             }
+
+            // Verify payment status with Razorpay API
+            const payment = await this.instance.payments.fetch(razorpayPaymentId);
             
-            return await this.instance.payments.fetch(razorpayPaymentId);
-        } catch (error) {
-            if (error instanceof Error && error.message === 'Invalid payment signature') {
-                throw error;
+            if (payment.status !== 'captured') {
+                throw new Error(`Payment not captured - Status: ${payment.status}`);
             }
+
+            return payment;
+
+        } catch (error: any) {
+            console.error('Payment Verification Error:', {
+                orderId: razorpayOrderId,
+                paymentId: razorpayPaymentId,
+                error: error.message
+            });
             
-            if (error instanceof Error && error.message.includes('Buffer')) {
-                // Handle timing safe comparison errors (different length buffers)
-                throw new Error('Invalid signature format');
-            }
-            
-            throw new Error(`Payment verification failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            throw new Error(`Payment verification failed: ${error.message}`);
         }
     }
 

@@ -27,6 +27,7 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
         }
         const shippingAmount = order.totalAmount > 699 ? 0: 55;
         const totalAmount = order.totalAmount + shippingAmount;
+        // const totalAmount = 2;
         // Create Razorpay order
         const razorpayOrder = await razorpayService.createOrder({
             amount: totalAmount * 100, // Convert to paise
@@ -58,29 +59,38 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
             razorpay_payment_id, 
             razorpay_order_id, 
             razorpay_signature,
-            orderId  // Your database order ID
+            orderId
         } = req.body;
-        
-        if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-            res.status(400).json({ 
-                message: 'Missing required payment verification parameters' 
+
+        // Validate all required parameters
+        const missingParams = [];
+        if (!razorpay_payment_id) missingParams.push('razorpay_payment_id');
+        if (!razorpay_order_id) missingParams.push('razorpay_order_id');
+        if (!razorpay_signature) missingParams.push('razorpay_signature');
+        if (!orderId) missingParams.push('orderId');
+
+        if (missingParams.length > 0) {
+            res.status(400).json({
+                message: 'Missing required parameters',
+                missing: missingParams
             });
             return;
         }
-        
+
         // Verify payment signature
         const payment = await razorpayService.verifyPayment(
             razorpay_order_id,
             razorpay_payment_id,
             razorpay_signature
         );
-        
-        // Update order status using your MongoDB orderId
+
+        // Update order status
         const updatedOrder = await Order.findByIdAndUpdate(
             orderId,
             {
                 'payment.status': 'completed',
                 'payment.transactionId': razorpay_payment_id,
+                'payment.verifiedAt': new Date(),
                 status: 'processing'
             },
             { new: true }
@@ -130,9 +140,11 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
         });
 
     } catch (error: any) {
-        console.error('Payment verification error:', error);
+        console.error('Payment Verification Error:', error);
         res.status(400).json({
-            message: 'Payment verification failed',
+            message: error.message.startsWith('Payment verification') 
+                ? error.message 
+                : 'Payment verification failed',
             error: error.message
         });
     }
