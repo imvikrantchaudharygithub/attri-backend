@@ -190,7 +190,10 @@ export const getUserOrders = async (req: Request, res: Response): Promise<void> 
 export const getUserRecentOrders = async (req: Request, res: Response): Promise<void> => {
   try {
     const { userId } = req.params;
-
+    const result = await Order.deleteMany({
+      user: userId,
+      status: 'pending'
+    });
     // Validate user ID format
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       res.status(400).json({ message: 'Invalid user ID format' });
