@@ -19,7 +19,7 @@ import {
   setDefaultAddress
 } from '../controllers/addressController';
 import { verifyToken } from '../middlewares/auth';
-import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems, increaseCartItemQuantity, decreaseCartItemQuantity} from '../controllers/cartController';
+import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems, increaseCartItemQuantity, decreaseCartItemQuantity, emptyCart} from '../controllers/cartController';
 // import { createRazorpayOrder,verifyPayment } from '../controllers/paymentController';
 import { createOrder,deleteOrder,getAllOrders,getOrderById,getUserOrders, getUserRecentOrders} from '../controllers/orderController';
 import { createRazorpayOrder, verifyPayment, distributeCommissionsManual, deductUserBalance } from '../controllers/paymentController';
@@ -126,6 +126,7 @@ router.post('/add-bulk-items', verifyToken, addBulkCartItems);
 // Cart quantity routes
 router.post('/cart/increase-quantity', verifyToken, increaseCartItemQuantity);
 router.post('/cart/decrease-quantity', verifyToken, decreaseCartItemQuantity);
+router.post('/empty-cart', verifyToken, emptyCart);
 
 // razorpay routes
 router.post('/create-order', verifyToken, createOrder);

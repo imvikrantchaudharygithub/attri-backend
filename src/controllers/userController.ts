@@ -96,6 +96,9 @@ export const verifyLoginOtp = async (req: Request, res: Response): Promise<void>
 
 // Verify OTP and add the user if not exists //using when signup
 export const verifyAndAddUser = async (req: Request, res: Response): Promise<void> => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
+  
   const { phone, otp, username, referralcode, dateofbirth } = req.body;
   let token: any;
 
@@ -131,14 +134,22 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
       // Process referral code AFTER user is saved
       if (referralcode) {
         try {
-          // Find referrer by exact code match
-          const referrer:any = await User.findOne({ referral_code: referralcode.trim() });
-          
+          const referrer: any = await User.findOne({ 
+            referral_code: referralcode.trim() 
+          }).session(session);
+
           if (!referrer) {
             console.error(`Referral code not found: "${referralcode}"`);
-            // Continue without error - just don't set the referral
           } else {
             console.log(`Found referrer: ${referrer._id} for code: ${referralcode}`);
+
+            // Add cashback to referrer
+            await User.findByIdAndUpdate(
+              referrer._id,
+              { $inc: { cashback: 10 } },
+              { session }
+            );
+            console.log(`Added 10 cashback to referrer ${referrer._id}`);
 
             // Convert IDs to strings for comparison/debugging
             const referrerId = referrer._id.toString();
@@ -167,8 +178,8 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
             console.log(`Verification - user referral_by: ${Array.isArray(verifyUser?.referral_by) ? verifyUser.referral_by.length : 0}`);
           }
         } catch (error) {
-          // Log error but don't fail registration
-          console.error('Error processing referral code:', error);
+          await session.abortTransaction();
+          throw error;
         }
       }
     }
@@ -181,9 +192,13 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
     }
 
     res.status(200).json({ message: 'Login successful', user, token });
+    await session.commitTransaction();
   } catch (error) {
+    await session.abortTransaction();
     console.error('Error in verifyAndAddUser:', error);
     res.status(500).json({ message: 'Failed to verify OTP or add user', error });
+  } finally {
+    session.endSession();
   }
 };
 

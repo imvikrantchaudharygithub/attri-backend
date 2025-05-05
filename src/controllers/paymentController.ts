@@ -83,7 +83,7 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
             razorpay_payment_id,
             razorpay_signature
         );
-
+console.log("payment",payment);
         // Update order status
         const updatedOrder = await Order.findByIdAndUpdate(
             orderId,

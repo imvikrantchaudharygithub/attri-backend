@@ -470,3 +470,39 @@ export const decreaseCartItemQuantity = async (req: AuthenticatedRequest, res: R
         });
     }
 };
+
+export const emptyCart = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+    try {
+        const userId = req.userId;
+
+        // Validate user authentication
+        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+            res.status(401).json({ message: "Invalid user authentication" });
+            return;
+        }
+
+        // Find and clear the cart using atomic update
+        const clearedCart = await Cart.findOneAndUpdate(
+            { userId },
+            { $set: { items: [] } },
+            { new: true, runValidators: true }
+        ).populate('items.product', 'name price images');
+
+        if (!clearedCart) {
+            res.status(404).json({ message: "Cart not found" });
+            return;
+        }
+
+        res.status(200).json({
+            message: "Cart emptied successfully",
+            cart: clearedCart
+        });
+
+    } catch (error: any) {
+        console.error("Cart clearance error:", error);
+        res.status(500).json({
+            message: "Failed to empty cart",
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
+    }
+};

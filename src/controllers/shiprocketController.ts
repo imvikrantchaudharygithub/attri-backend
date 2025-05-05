@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import Order from '../models/order.model';
 import { shiprocketService } from '../services/shirocketService';
 
+
 export const createShiprocketOrder = async (orderId:string): Promise<any> => {
   try {
 
@@ -150,6 +151,19 @@ export const generateManifest = async (req: Request, res: Response): Promise<voi
       return;
     }
 
+    // Add before manifest generation
+    // const preCheck = await shiprocketService.checkShipmentStatus(shipmentIds);
+    // if (!preCheck.valid) {
+    //    res.status(400).json({
+    //     success: false,
+    //     message: 'Shipments not ready for manifest',
+    //     preCheck: preCheck.valid,
+    //     // invalid_shipments: preCheck.invalid,
+    //     // raw_response: preCheck // For debugging
+    //   });
+    //   return;
+    // }
+
     // Convert to strings for DB query
     const stringIds = shipmentIds.map(String);
 
@@ -177,7 +191,7 @@ export const generateManifest = async (req: Request, res: Response): Promise<voi
 
     // Generate manifest with Shiprocket
     const response = await shiprocketService.generateManifest({
-      shipment_ids: shipmentIds.map(id => Number(id))
+      shipment_id: shipmentIds.map(id => Number(id))
     });
 
     // Update orders with manifest URL from response
@@ -189,10 +203,7 @@ export const generateManifest = async (req: Request, res: Response): Promise<voi
     res.json({
       success: true,
       message: 'Manifest generated successfully',
-      data: {
-        manifest_url: response.manifest_url,
-        updated_count: orders.length
-      }
+      data: response
     });
 
   } catch (error: any) {
@@ -452,12 +463,12 @@ export const printManifest = async (req: Request, res: Response): Promise<void> 
 
     // Check for existing manifests in database
     const invalidShipments = await Order.find({
-      tracking_number: { $in: stringIds },
+      tracking_orderids: { $in: stringIds },
       manifest_url: { $exists: false }
     });
 
     if (invalidShipments.length > 0) {
-      const missingIds = invalidShipments.map(s => s.tracking_number);
+      const missingIds = invalidShipments.map(s => s.tracking_orderid);
       res.status(400).json({
         success: false,
         message: 'Manifest not generated for these shipments',

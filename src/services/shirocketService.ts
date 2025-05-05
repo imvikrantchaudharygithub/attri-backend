@@ -137,7 +137,11 @@ class ShiprocketService {
     });
 
     this.apiClient = axios.create({
-      baseURL: 'https://apiv2.shiprocket.in/v1/external/'
+      baseURL: 'https://apiv2.shiprocket.in/v1/external',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.SHIPROCKET_TOKEN}`
+      }
     });
 
     this.apiClient.interceptors.request.use(async (config) => {
@@ -147,6 +151,22 @@ class ShiprocketService {
       config.headers.Authorization = `Bearer ${this.token}`;
       return config;
     });
+
+    // Add response interceptor for error handling
+    this.apiClient.interceptors.response.use(
+      response => response,
+      error => {
+        if (error.response?.status === 401) {
+          // Handle token expiration
+          return this.refreshToken().then(() => {
+            const config = error.config;
+            config.headers.Authorization = `Bearer ${process.env.SHIPROCKET_TOKEN}`;
+            return this.apiClient(config);
+          });
+        }
+        return Promise.reject(error);
+      }
+    );
   }
 
   private isTokenExpired(): boolean {
@@ -173,11 +193,11 @@ class ShiprocketService {
     }
   }
 
-  async generateManifest(payload: { shipment_ids: number[] }) {
+  async generateManifest(payload: { shipment_id: number[] }) {
     try {
       // Check existing manifests first
       const ordersWithManifest = await Order.find({ 
-        tracking_number: { $in: payload.shipment_ids.map(String) },
+        tracking_number: { $in: payload.shipment_id.map(String) },
         manifest_url: { $exists: true, $ne: null }
       });
 
@@ -187,9 +207,9 @@ class ShiprocketService {
       }
 
       const response = await this.apiClient.post('/manifests/generate', {
-        shipment_ids: payload.shipment_ids
+        shipment_id: payload.shipment_id
       });
-
+      console.log(response.data);
       return response.data;
       
     } catch (error: any) {
@@ -197,7 +217,7 @@ class ShiprocketService {
       
       // Handle specific Shiprocket error
       if (error.response?.data?.message.includes('already generated')) {
-        errorMessage = `Manifest already exists for these shipments: ${payload.shipment_ids.join(', ')}`;
+        errorMessage = `Manifest already exists for these shipments: ${payload.shipment_id.join(', ')}`;
       }
       
       throw new Error(errorMessage);
@@ -372,6 +392,45 @@ class ShiprocketService {
       });
     }
   }
+  async checkShipmentStatus(shipmentIds: number[]) {
+    try {
+      const response = await this.apiClient.get('/shipments', {
+        params: {
+          shipment_ids: shipmentIds.join(',')
+        }
+      });
+
+      // Handle different response formats
+      const responseData = response.data?.data || response.data;
+      
+      if (!responseData || !Array.isArray(responseData)) {
+        throw new Error('Invalid response format from Shiprocket');
+      }
+
+      const validStatuses = ['processing', 'ready_to_ship', 'confirmed'];
+      
+      return {
+        valid: responseData.every((s: any) => 
+          validStatuses.includes(s.status?.toLowerCase())
+        ),
+        invalid: responseData
+          .filter((s: any) => !validStatuses.includes(s.status?.toLowerCase()))
+          .map((s: any) => ({
+            shipment_id: s.shipment_id || s.id,
+            status: s.status,
+            issues: s.issues || []
+          }))
+      };
+    } catch (error: any) {
+      console.error('Shipment Status Check Error:', {
+        error: error.response?.data || error.message,
+        endpoint: '/shipments',
+        shipmentIds
+      });
+      
+      throw new Error(`Status check failed: ${error.response?.data?.message || error.message}`);
+    }
+  }
 
   async printManifest(payload: { shipment_ids: number[]; format?: 'pdf' | 'csv' }) {
     try {
@@ -405,6 +464,40 @@ class ShiprocketService {
       : `Raw API response: ${rawError}`;
 
     throw new Error(`Shiprocket ${context} failed: ${errorMessage} ${errorDetails}`);
+  }
+
+  private async refreshToken() {
+    try {
+      const response = await axios.post('https://apiv2.shiprocket.in/v1/external/auth/login', {
+        email: process.env.SHIPROCKET_EMAIL,
+        password: process.env.SHIPROCKET_PASSWORD
+      });
+
+      if (response.data?.token) {
+        process.env.SHIPROCKET_TOKEN = response.data.token;
+        return response.data.token;
+      }
+      throw new Error('Failed to refresh token');
+    } catch (error) {
+      console.error('Token Refresh Error:', error);
+      throw new Error('Authentication failed');
+    }
+  }
+
+  private parseShipmentResponse(response: any) {
+    if (Array.isArray(response.data)) {
+      return response.data;
+    }
+    
+    if (response.data?.shipments) {
+      return response.data.shipments;
+    }
+    
+    if (response.data?.data) {
+      return response.data.data;
+    }
+    
+    return [];
   }
 }
 
