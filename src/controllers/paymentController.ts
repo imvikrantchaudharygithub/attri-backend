@@ -26,7 +26,7 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
             return;
         }
         const shippingAmount = order.totalAmount > 699 ? 0: 55;
-        const totalAmount = order.totalAmount + shippingAmount;
+        const totalAmount = order.totalAmount + Number(shippingAmount.toFixed(2));
         // const totalAmount = 2;
         // Create Razorpay order
         const razorpayOrder = await razorpayService.createOrder({
