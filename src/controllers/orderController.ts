@@ -60,7 +60,7 @@ export const createOrder = async (req: Request, res: Response) => {
         priceAtPurchase: product.price
       });
 
-      totalAmount += product.price * item.quantity;
+      totalAmount += Number((product.price * item.quantity).toFixed(2));
     }
 
     // Create order
@@ -68,7 +68,7 @@ export const createOrder = async (req: Request, res: Response) => {
       user,
       address,
       products: productItems,
-      totalAmount,
+      totalAmount: Number(totalAmount.toFixed(2)),
       notes: notes || '',
       status: 'pending'
     });
