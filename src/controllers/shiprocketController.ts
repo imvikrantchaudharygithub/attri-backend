@@ -64,7 +64,7 @@ export const createShiprocketOrder = async (orderId:string): Promise<any> => {
       order.tracking_orderid = response?.data?.order_id.toString();
       await order.save();
     }
-    console.log(response?.data);
+    console.log("Order created in Shiprocket", response?.data);
 
     return {
       success: true,

@@ -212,40 +212,40 @@ export const getProductBySlug = async (req: Request, res: Response): Promise<voi
 };
 
 // Update a product
-export const updateProduct = async (req: Request, res: Response): Promise<void> => {
-  const { id } = req.params;
-  const { name, description, mrp, discount, stock, category, image, status } = req.body;
+// export const updateProduct = async (req: Request, res: Response): Promise<void> => {
+//   const { id } = req.params;
+//   const { name, description, mrp, discount, stock, category, image, status } = req.body;
 
-  try {
-    // Check if the category exists
-    if (category) {
-      const categoryExists = await ProductCategory.findById(category);
-      if (!categoryExists) {
-        res.status(404).json({ message: 'Category not found' });
-        return;
-      }
-    }
+//   try {
+//     // Check if the category exists
+//     if (category) {
+//       const categoryExists = await ProductCategory.findById(category);
+//       if (!categoryExists) {
+//         res.status(404).json({ message: 'Category not found' });
+//         return;
+//       }
+//     }
 
-    // Calculate the price after discount
-    const price = discount ? calculatePrice(mrp, discount) : undefined;
+//     // Calculate the price after discount
+//     const price = discount ? calculatePrice(mrp, discount) : undefined;
 
-    const updatedProduct = await Product.findByIdAndUpdate(
-      id,
-      { name, description, mrp, price, discount, stock, category, image, status },
-      { new: true, runValidators: true }
-    );
+//     const updatedProduct = await Product.findByIdAndUpdate(
+//       id,
+//       { name, description, mrp, price, discount, stock, category, image, status },
+//       { new: true, runValidators: true }
+//     );
 
-    if (!updatedProduct) {
-      res.status(404).json({ message: 'Product not found' });
-      return;
-    }
+//     if (!updatedProduct) {
+//       res.status(404).json({ message: 'Product not found' });
+//       return;
+//     }
 
-    res.status(200).json({ message: 'Product updated successfully', product: updatedProduct });
-  } catch (error) {
-    console.error('Error updating product:', error);
-    res.status(500).json({ message: 'Internal server error', error });
-  }
-};
+//     res.status(200).json({ message: 'Product updated successfully', product: updatedProduct });
+//   } catch (error) {
+//     console.error('Error updating product:', error);
+//     res.status(500).json({ message: 'Internal server error', error });
+//   }
+// };
 
 // Delete a product
 export const deleteProduct = async (req: Request, res: Response): Promise<void> => {
@@ -385,4 +385,208 @@ export const searchProducts = async (req: Request, res: Response): Promise<void>
       error: error.message
     });
   }
+};
+
+export const updateProduct = async (req: Request, res: Response): Promise<void> => {
+  const { id } = req.params;
+  const { 
+      name, rating, description, mrp, discount, stock, category, 
+      status, gallery, faqs, ingredients, info, tags, images
+  } = req.body;
+
+  // Parse complex fields
+  const parsedImages = typeof images === "string" ? JSON.parse(images) : images || [];
+  const parsedGallery = typeof gallery === "string" ? JSON.parse(gallery) : gallery || [];
+  const parsedFaqs = typeof faqs === "string" ? JSON.parse(faqs) : faqs || [];
+  const parsedIngredients = typeof ingredients === "string" ? JSON.parse(ingredients) : ingredients || [];
+  const parsedInfo = typeof info === "string" ? JSON.parse(info) : info || [];
+  const parsedTags = typeof tags === "string" ? JSON.parse(tags) : tags || [];
+
+  try {
+      const product:any = await Product.findById(id);
+      if (!product) {
+          res.status(404).json({ message: "Product not found" });
+          return;
+      }
+
+      // Validate category if provided
+      if (category && category !== product.category.toString()) {
+          const categoryExists = await ProductCategory.findById(category);
+          if (!categoryExists) {
+              res.status(404).json({ message: "Category not found" });
+              return;
+          }
+      }
+
+      // Type assertion for files
+      const files = req.files as {
+          images?: Express.Multer.File[];
+          gallery?: Express.Multer.File[];
+          ingredients?: Express.Multer.File[];
+      };
+
+      // Process main images
+      let updatedImages = [...parsedImages];
+      
+      // 1. Handle base64 images in the parsedImages array
+      const base64Images = parsedImages.filter((img: string) => 
+          img.startsWith('data:image/')
+      );
+      
+      // Upload base64 images to Cloudinary
+      if (base64Images.length > 0) {
+          const uploadedBase64Images = await Promise.all(
+              base64Images.map(async (base64: string) => {
+                  const result = await uploadBase64ToCloudinary(base64, 'products');
+                  return result.secure_url;
+              })
+          );
+          
+          // Replace base64 with Cloudinary URLs
+          updatedImages = [
+              ...parsedImages.filter((img: string) => !img.startsWith('data:image/')),
+              ...uploadedBase64Images
+          ];
+      }
+      
+      // 2. Handle uploaded files
+      if (files?.images && files.images.length > 0) {
+          const newImages = await Promise.all(
+              files.images.map(async (file) => {
+                  const result: any = await uploadToCloudinary(file, 'products');
+                  return result.secure_url;
+              })
+          );
+          
+          // Append new images
+          updatedImages = [...updatedImages, ...newImages];
+      }
+      
+      product.images = updatedImages;
+
+      // Process gallery images
+      let updatedGallery = [...parsedGallery];
+      if (files?.gallery && files.gallery.length > 0) {
+          const galleryTitles = Array.isArray(req.body.galleryTitles) 
+              ? req.body.galleryTitles : [];
+          const galleryDescriptions = Array.isArray(req.body.galleryDescriptions) 
+              ? req.body.galleryDescriptions : [];
+          
+          const newGalleryItems = await Promise.all(
+              files.gallery.map(async (file, index) => {
+                  const result: any = await uploadToCloudinary(file, 'gallery');
+                  return {
+                      image: result.secure_url,
+                      title: galleryTitles[index] || 'Untitled',
+                      description: galleryDescriptions[index] || 'No description'
+                  };
+              })
+          );
+          
+          updatedGallery = [...updatedGallery, ...newGalleryItems];
+      }
+
+      // Process ingredients images
+      let updatedIngredients = [...parsedIngredients];
+      if (files?.ingredients && files.ingredients.length > 0) {
+          const ingredientTitles = Array.isArray(req.body.ingredientTitles) 
+              ? req.body.ingredientTitles : [];
+          const ingredientDescriptions = Array.isArray(req.body.ingredientDescriptions) 
+              ? req.body.ingredientDescriptions : [];
+          
+          const newIngredients = await Promise.all(
+              files.ingredients.map(async (file, index) => {
+                  const result: any = await uploadToCloudinary(file, 'ingredients');
+                  return {
+                      image: result.secure_url,
+                      title: ingredientTitles[index] || 'Untitled',
+                      description: ingredientDescriptions[index] || 'No description'
+                  };
+              })
+          );
+          
+          updatedIngredients = [...updatedIngredients, ...newIngredients];
+      }
+
+      // Update product fields
+      if (name) product.name = name;
+      if (rating) product.rating = rating;
+      if (description) product.description = description;
+      if (mrp) product.mrp = mrp;
+      if (discount !== undefined) product.discount = discount;
+      product.price = product.mrp - (product.mrp * (product.discount || 0)) / 100;
+      if (stock !== undefined) product.stock = stock;
+      if (status) product.status = status;
+      
+      // Handle category update
+      if (category && category !== product.category.toString()) {
+          await ProductCategory.findByIdAndUpdate(
+              product.category,
+              { $pull: { products: product._id } }
+          );
+          
+          await ProductCategory.findByIdAndUpdate(
+              category,
+              { $push: { products: product._id } }
+          );
+          
+          product.category = category;
+      }
+      
+      // Update arrays
+      product.gallery = updatedGallery;
+      product.ingredients = updatedIngredients;
+      product.faqs = parsedFaqs.map((faq: any) => ({
+          question: faq.question || 'No question',
+          answer: faq.answer || 'No answer'
+      }));
+      product.info = parsedInfo.map((info: any) => ({
+          title: info.title || 'No title',
+          description: info.description || 'No description'
+      }));
+      product.tags = parsedTags;
+
+      // Save updated product
+      const updatedProduct = await product.save();
+
+      res.status(200).json({ 
+          message: "Product updated successfully", 
+          product: updatedProduct 
+      });
+      
+  } catch (error) {
+      console.error("❌ Error updating product:", error);
+      res.status(500).json({ 
+          message: "Internal server error", 
+          error: error instanceof Error ? error.message : String(error) 
+      });
+  }
+};
+
+// Cloudinary upload helper for files
+const uploadToCloudinary = (file: Express.Multer.File, folder: string): Promise<any> => {
+  return new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+          { folder, resource_type: 'auto' },
+          (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+          }
+      );
+      uploadStream.end(file.buffer);
+  });
+};
+
+// New helper for base64 uploads
+const uploadBase64ToCloudinary = (base64: string, folder: string): Promise<any> => {
+  return new Promise((resolve, reject) => {
+      cloudinary.uploader.upload(
+          base64,
+          { folder, resource_type: 'image' },
+          (error, result) => {
+              if (error) reject(error);
+              else resolve(result);
+          }
+      );
+  });
 };

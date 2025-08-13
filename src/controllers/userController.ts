@@ -480,7 +480,7 @@ export const getUserByReferralCode = async (req: Request, res: Response): Promis
     const user = await User.findOne({ referral_code: referralCode });
 
     if (!user) {
-      res.status(201).json({ message: 'User not found with this referral code' });
+      res.status(404).json({ message: 'User not found with this referral code' });
       return;
     }
 

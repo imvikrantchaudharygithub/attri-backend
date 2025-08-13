@@ -8,9 +8,7 @@ import router from './routes/routes'; // Assuming you have a `router.ts` file in
 import path from 'path';
 import fs from 'fs';
 import { sendSMS } from './services/smsSevice';
-import { createSingleOrderShipment } from '../src/controllers/deliveryController';
-import { createShiprocketOrder } from '../src/controllers/shiprocketController';
-import { shiprocketService } from '../src/services/shirocketService';
+// import { createShiprocketOrder } from '../src/controllers/shiprocketController';
 // Load environment variables from .env file
 dotenv.config();
 
@@ -76,34 +74,13 @@ app.use('/api', router);
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello, World!');
 });
-// sendSMS("8191046161", 1234).then((response) => {
+// sendSMS("+919520887693", 123456).then((response) => {
 //   console.log(response);
 // }).catch((error) => {
 //   console.log(error);
 // });
 // Start the server
-
-// createSingleOrderShipment("67f0dd98d754e8c324f3fda5").then((response) => {
-//   console.log(response);
-// }).catch((error) => {
-//   console.log(error);
-// });
-
-// createShiprocketOrder("67f55d97c0edd3833351a806").then((response) => {
-//   console.log(response);
-// }).catch((error) => {
-//   console.log(error);
-// });'
-// shiprocketService.generateManifest({shipment_ids: [800819084]}).then((response) => {
-//   console.log(response.data);
-// }).catch((error) => {
-//   console.log(error);
-// });
-// shiprocketService.trackOrderByOrderId("67f55d97c0edd3833351a806","").then((response) => {
-//   console.log(response.data,response?.data?.tracking_data?.shipment_track_activities);
-// }).catch((error) => {
-//   console.log(error);
-// });
+// createShiprocketOrder("688a0449144c62a304969cb2")
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
-});``
+});

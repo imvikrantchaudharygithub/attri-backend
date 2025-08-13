@@ -79,7 +79,12 @@ const storage = multer.memoryStorage(); // Use memory storage for Cloudinary
 router.post('/create-product',uploadp, createProduct); // Create a new product
 router.get('/get-products', getAllProducts); // Get all products
 router.get('/get-product/:slug', getProductBySlug); // Get a single product by ID
-// router.put('/:id', updateProduct); // Update a product
+router.put('/edit-product/:id', upload.fields([
+  { name: 'images', maxCount: 10 },
+  { name: 'gallery', maxCount: 10 },
+  { name: 'ingredients', maxCount: 10 }
+]),
+updateProduct, updateProduct ); // Update a product
 router.post('/delete-product', deleteProduct); // Delete a product
 
 router.post('/buy-product', buyProduct); 
