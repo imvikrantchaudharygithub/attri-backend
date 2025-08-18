@@ -25,18 +25,19 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
             res.status(404).json({ message: 'Order not found' });
             return;
         }
-        const shippingAmount = order.totalAmount > 699 ? 0: 55;
-        const totalAmount = order.totalAmount + Number(shippingAmount.toFixed(2));
-        // const totalAmount = 2;
-        // Create Razorpay order
-        const razorpayOrder = await razorpayService.createOrder({
-            amount: totalAmount * 100, // Convert to paise
-            currency: 'INR',
-            receipt: order._id.toString(),
-            notes: {
-                internalOrderId: order._id.toString()
-            }
-        });
+        const shippingAmount = order.totalAmount > 699 ? 0 : 55;
+		// Ensure integer paise
+		const amountInPaise = Math.round((Number(order.totalAmount) + Number(shippingAmount)) * 100);
+
+		// Create Razorpay order
+		const razorpayOrder = await razorpayService.createOrder({
+			amount: amountInPaise, // integer paise
+			currency: 'INR',
+			receipt: order._id.toString(),
+			notes: {
+				internalOrderId: order._id.toString()
+			}
+		});
 
         res.status(200).json({
             id: razorpayOrder.id,

@@ -57,7 +57,7 @@ export const createOrder = async (req: Request, res: Response) => {
       productItems.push({
         product: item.product,
         quantity: item.quantity,
-        priceAtPurchase: product.price
+        priceAtPurchase: Number(product.price)
       });
 
       totalAmount += Number((product.price * item.quantity).toFixed(2));

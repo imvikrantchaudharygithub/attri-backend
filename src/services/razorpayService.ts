@@ -37,12 +37,12 @@ class RazorpayService {
     }) {
         try {
             return await this.instance.orders.create({
-                amount: params.amount,
-                currency: params.currency,
-                receipt: params.receipt,
-                notes: params.notes,
-                payment_capture: true // Auto-capture payments
-            });
+				amount: Math.round(params.amount), // ensure integer paise
+				currency: params.currency,
+				receipt: params.receipt,
+				notes: params.notes,
+				payment_capture: true // Auto-capture payments
+			});
         } catch (error: any) {
             console.error('Razorpay API Error:', error.error);
             throw new Error(`Payment failed: ${error.error.description}`);
