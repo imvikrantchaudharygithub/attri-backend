@@ -26,8 +26,9 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
             return;
         }
         const shippingAmount = order.totalAmount > 699 ? 0 : 55;
-		// Ensure integer paise
-		const amountInPaise = Math.round((Number(order.totalAmount) + Number(shippingAmount)) * 100);
+        const payable = Math.max(0, Number(order.totalAmount) - Number(order.cashback) + Number(shippingAmount));
+        const amountInPaise = Math.round(payable * 100);
+
 
 		// Create Razorpay order
 		const razorpayOrder = await razorpayService.createOrder({
@@ -38,6 +39,7 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
 				internalOrderId: order._id.toString()
 			}
 		});
+      
 
         res.status(200).json({
             id: razorpayOrder.id,
@@ -134,6 +136,11 @@ console.log("payment",payment);
         await distributeCommissions(user?.toObject(),updatedOrder.totalAmount);
     //    const shipmentData = await createSingleOrderShipment(updatedOrder._id.toString());
         const shipmentData = await createShiprocketOrder(updatedOrder._id.toString());
+        // const user:any = await User.findById(updatedOrder.user);
+        if(Number(user.cashback) > 0){
+            user.cashback = Number(user.cashback) - Number(updatedOrder.cashback);
+            await user.save();
+        }
         res.status(200).json({
             message: 'Payment verified successfully',
             order: updatedOrder,

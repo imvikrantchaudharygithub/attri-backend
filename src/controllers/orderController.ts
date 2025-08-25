@@ -21,7 +21,7 @@ interface IOrderProduct {
 // Create new order
 export const createOrder = async (req: Request, res: Response) => {
   try {
-    const { user, address, products, notes } = req.body;
+    const { user, address, products, notes,cashback } = req.body;
 
     // Validate required fields
     if (!user || !address || !products ) {
@@ -35,7 +35,12 @@ export const createOrder = async (req: Request, res: Response) => {
       res.status(404).json({ message: 'User not found' });
       return 
     }
-
+    if(cashback>0){
+    if(Number(userExists.cashback) < Number(cashback)){
+      res.status(400).json({ message: `Cashback is not enough ${userExists.cashback} - ${cashback}` });
+      return 
+    }
+  }
     // Check if address exists
     const addressExists = await Address.findById(address);
     if (!addressExists) {
@@ -70,7 +75,8 @@ export const createOrder = async (req: Request, res: Response) => {
       products: productItems,
       totalAmount: Number(totalAmount.toFixed(2)),
       notes: notes || '',
-      status: 'pending'
+      status: 'pending',
+      cashback: Number(cashback)
     });
 
     const savedOrder = await newOrder.save();

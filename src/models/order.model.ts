@@ -40,6 +40,10 @@ const orderSchema = new mongoose.Schema({
       required: true
     }
   }],
+  cashback: {
+    type: Number,
+    default: 0
+  },
   status: {
     type: String,
     enum: ['pending', 'processing', 'confirmed', 'shipped', 'delivered', 'cancelled'],

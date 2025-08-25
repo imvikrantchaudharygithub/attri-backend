@@ -96,11 +96,12 @@ export const getCart = async (req: AuthenticatedRequest, res: Response): Promise
 
         // Find the first (and only) default address from populated array
         const defaultAddress = (user?.addresses as IAddress[] | undefined)?.find(addr => addr.isDefault===true) || null;
-
+        const userDetails = await User.findById(userId).select('name phone cashback referral_code');
         res.status(200).json({
             message: "Cart retrieved successfully",
             cart,
-            defaultAddress
+            defaultAddress,
+            userDetails
         });
     } catch (error: any) {
         console.error("Cart error:", error);
