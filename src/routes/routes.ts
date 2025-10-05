@@ -28,6 +28,7 @@ import { createRazorpayOrder, verifyPayment, distributeCommissionsManual, deduct
 import { withdrawalController } from '../controllers/withdrawalController';
 import { addWarehouse, getTrackingDetails, getShipmentDetails, manifestOrder, getCourierList } from '../controllers/deliveryController';
 import { addPickupAddress, generateManifest, shiprocketWebhook, trackOrderByOrderId, getcheckServiceability, assignAWB, generateLabel, generatePickup, printManifest } from '../controllers/shiprocketController';
+import { createCoupon, getCoupons, getCouponByCode, applyCoupon, updateCoupon, deleteCoupon } from '../controllers/couponController';
 
 const router = express.Router();
 
@@ -187,5 +188,16 @@ router.post('/check-serviceability', getcheckServiceability);
 router.post('/assign-awb', assignAWB);
 router.post('/generate-pickup', generatePickup);
 router.post('/print-manifest', printManifest);
+
+// Coupon routes
+// Admin coupon management routes
+router.post('/admin/create-coupon', createCoupon); // Create a new coupon
+router.get('/admin/get-coupons', getCoupons); // Get all coupons
+router.put('/admin/update-coupon/:id', updateCoupon); // Update a coupon
+router.post('/admin/delete-coupon/:id', deleteCoupon); // Delete a coupon
+
+// Client-facing coupon routes
+router.get('/coupon/:code', getCouponByCode); // Get coupon by code (public)
+router.post('/apply-coupon', verifyToken, applyCoupon); // Apply coupon to cart
 
 export default router;

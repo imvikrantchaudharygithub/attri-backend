@@ -254,6 +254,7 @@ class ShiprocketService {
         pickup_postcode: payload.pickup_postcode.toString(),
         delivery_postcode: payload.delivery_postcode.toString()
       };
+      console.log( "formattedPayload", formattedPayload);
 
       const response = await this.apiClient.get('/courier/serviceability', {
         params: {

@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import Coupon from '../models/coupon.model';
+import Cart from '../models/cart.model';
+import mongoose from 'mongoose';
 
 // Create a new coupon
 export const createCoupon = async (req: Request, res: Response): Promise<void> => {
@@ -100,15 +102,37 @@ export const getCouponByCode = async (req: Request, res: Response): Promise<void
 // Apply coupon to calculate discount
 export const applyCoupon = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { code, cartItems, cartTotal } = req.body;
-
-    if (!code || !cartItems || cartTotal === undefined) {
+    const { code, cartId } = req.body;
+    if (!code || !cartId) {
       res.status(400).json({
         success: false,
-        message: 'Coupon code, cart items, and cart total are required',
+        message: 'Coupon code and cart ID are required',
       });
       return;
     }
+
+    // Validate cart ID
+    if (!mongoose.Types.ObjectId.isValid(cartId)) {
+      res.status(400).json({
+        success: false,
+        message: 'Invalid cart ID',
+      });
+      return;
+    }
+
+    // Find the cart with populated products
+    const cart = await Cart.findById(cartId).populate('items.product');
+    if (!cart) {
+      res.status(404).json({
+        success: false,
+        message: 'Cart not found',
+      });
+      return;
+    }
+
+    // Calculate cart total
+    const cartTotal = cart.items.reduce((total: number, item: any) => 
+      total + (item.price * item.quantity), 0);
 
     // Find the active coupon
     const coupon = await Coupon.findOne({
@@ -117,7 +141,6 @@ export const applyCoupon = async (req: Request, res: Response): Promise<void> =>
       validFrom: { $lte: new Date() },
       validTo: { $gte: new Date() },
     }).populate('products');
-
     if (!coupon) {
       res.status(404).json({
         success: false,
@@ -139,7 +162,7 @@ export const applyCoupon = async (req: Request, res: Response): Promise<void> =>
     if (coupon.minPurchaseAmount > 0 && cartTotal < coupon.minPurchaseAmount) {
       res.status(400).json({
         success: false,
-        message: `Minimum purchase amount of ${coupon.minPurchaseAmount} required`,
+        message: `Minimum purchase amount of ₹${coupon.minPurchaseAmount} required`,
       });
       return;
     }
@@ -151,9 +174,18 @@ export const applyCoupon = async (req: Request, res: Response): Promise<void> =>
     if (coupon.products && coupon.products.length > 0) {
       // Filter cart items that have products eligible for the coupon
       const eligibleProductIds = coupon.products.map(p => p._id.toString());
-      const eligibleCartItems = cartItems.filter((item: any) => 
-        eligibleProductIds.includes(item.productId.toString())
+      const eligibleCartItems = cart.items.filter((item: any) => 
+        eligibleProductIds.includes(item.product._id.toString())
       );
+      
+      // Check if any products in cart are eligible for this coupon
+      if (eligibleCartItems.length === 0) {
+        res.status(400).json({
+          success: false,
+          message: 'This coupon is not applicable to any products in your cart',
+        });
+        return;
+      }
       
       // Calculate discount for eligible items
       const eligibleTotal = eligibleCartItems.reduce((total: number, item: any) => 
@@ -190,8 +222,16 @@ export const applyCoupon = async (req: Request, res: Response): Promise<void> =>
         discountType: coupon.discountType,
         discountValue: coupon.discountValue,
       },
+      cartTotal: cartTotal,
       discount: discountAmount,
-      total: finalAmount,
+      finalAmount: finalAmount,
+      cartItems: cart.items.map((item: any) => ({
+        productId: item.product._id,
+        productName: item.product.name,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.price * item.quantity
+      }))
     });
   } catch (error) {
     console.error('Error applying coupon:', error);

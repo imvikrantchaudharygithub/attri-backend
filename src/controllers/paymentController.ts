@@ -8,6 +8,8 @@ import { distributeCommissions } from '../services/priceDistribution';
 // import { createSingleOrderShipment } from '../controllers/deliveryController';
 import { createShiprocketOrder } from '../controllers/shiprocketController';
 import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+dotenv.config();
 
 export const createRazorpayOrder = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -19,17 +21,18 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
             return;
         }
 
-        // Fetch order details
-        const order = await Order.findById(orderId);
+        // Fetch order details with coupon information
+        const order = await Order.findById(orderId).populate('coupon.couponId');
         if (!order) {
             res.status(404).json({ message: 'Order not found' });
             return;
         }
+        
         const shippingAmount = order.totalAmount > 699 ? 0 : 55;
-        const payable = Math.max(0, Number(order.totalAmount) - Number(order.cashback) + Number(shippingAmount));
+        const payable = Math.max(0, Number(order.totalAmount) + Number(shippingAmount));
         const amountInPaise = Math.round(payable * 100);
-
-
+        console.log("payable",payable);
+        console.log("order",order);
 		// Create Razorpay order
 		const razorpayOrder = await razorpayService.createOrder({
 			amount: amountInPaise, // integer paise
@@ -45,7 +48,19 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
             id: razorpayOrder.id,
             amount: razorpayOrder.amount,
             currency: razorpayOrder.currency,
-            key: process.env.RAZORPAY_KEY_ID
+            key: process.env.RAZORPAY_KEY_ID,
+            orderDetails: {
+                originalAmount: order.originalAmount,
+                couponDiscount: order.coupon?.discountAmount || 0,
+                cashbackUsed: order.cashback,
+                finalAmount: order.totalAmount,
+                shippingAmount: shippingAmount,
+                payableAmount: payable
+            },
+            couponApplied: order.coupon?.code ? {
+                code: order.coupon.code,
+                discountAmount: order.coupon.discountAmount
+            } : null
         });
 
     } catch (error: any) {
@@ -57,6 +72,7 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
 };
 
 export const verifyPayment = async (req: Request, res: Response): Promise<void> => {
+    
     try {
         const { 
             razorpay_payment_id, 
@@ -64,7 +80,12 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
             razorpay_signature,
             orderId
         } = req.body;
-
+        console.log('=== DEBUG INFO ===');
+        console.log('Order ID:', razorpay_order_id);
+        console.log('Payment ID:', razorpay_payment_id);
+        console.log('Received Signature:', razorpay_signature);
+        console.log('Key Secret:', process.env.RAZORPAY_KEY_SECRET ? 'Present' : 'Missing');
+        console.log('Key ID:', process.env.RAZORPAY_KEY_ID ? 'Present' : 'Missing');
         // Validate all required parameters
         const missingParams = [];
         if (!razorpay_payment_id) missingParams.push('razorpay_payment_id');
@@ -139,6 +160,7 @@ console.log("payment",payment);
         // const user:any = await User.findById(updatedOrder.user);
         if(Number(user.cashback) > 0){
             user.cashback = Number(user.cashback) - Number(updatedOrder.cashback);
+
             await user.save();
         }
         res.status(200).json({

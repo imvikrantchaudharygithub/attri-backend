@@ -44,6 +44,25 @@ const orderSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  coupon: {
+    code: {
+      type: String,
+      default: null
+    },
+    discountAmount: {
+      type: Number,
+      default: 0
+    },
+    couponId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Coupon',
+      default: null
+    }
+  },
+  originalAmount: {
+    type: Number,
+    required: true
+  },
   status: {
     type: String,
     enum: ['pending', 'processing', 'confirmed', 'shipped', 'delivered', 'cancelled'],
