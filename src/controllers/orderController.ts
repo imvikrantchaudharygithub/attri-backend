@@ -117,7 +117,31 @@ export const createOrder = async (req: Request, res: Response) => {
 
         // Calculate discount based on coupon type
         let calculatedDiscount = 0;
-        if (coupon.products && coupon.products.length > 0) {
+        
+        // Handle B1G1 (Buy One Get One) discount type
+        if (coupon.discountType === 'b1g1') {
+          // Calculate total items in cart (sum of all quantities)
+          const totalItems = productItems.reduce((total: number, item: any) => 
+            total + item.quantity, 0);
+          
+          // B1G1 requires at least 2 items in cart
+          if (totalItems < 2) {
+            res.status(400).json({ 
+              success: false,
+              message: 'B1G1 offer requires at least 2 items in cart' 
+            });
+            return;
+          }
+          
+          // Find the lowest priced single item in cart
+          const lowestPricedItem = productItems.reduce((min: any, item: any) => 
+            item.priceAtPurchase < min.priceAtPurchase ? item : min
+          );
+          
+          // Set discount amount to the lowest priced item
+          calculatedDiscount = lowestPricedItem.priceAtPurchase;
+          
+        } else if (coupon.products && coupon.products.length > 0) {
           // Coupon applies to specific products only
           const eligibleProductIds = coupon.products.map((p: any) => p._id.toString());
           // console.log("Eligible product IDs:", eligibleProductIds);
@@ -393,3 +417,207 @@ export const getUserRecentOrders = async (req: Request, res: Response): Promise<
   }
 };
 
+// Mark order as delivered
+export const markOrderDelivered = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orderId } = req.body;
+
+    // Validate order ID
+    if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+      res.status(400).json({ 
+        success: false,
+        message: 'Invalid order ID' 
+      });
+      return;
+    }
+
+    // Find the order
+    const order = await Order.findById(orderId)
+      .populate('user', 'name phone email')
+      .populate('address')
+      .populate('products.product', 'name price images');
+
+    if (!order) {
+      res.status(404).json({ 
+        success: false,
+        message: 'Order not found' 
+      });
+      return;
+    }
+
+    // Check if order can be marked as delivered
+    if (order.status === 'cancelled') {
+      res.status(400).json({ 
+        success: false,
+        message: 'Cannot mark a cancelled order as delivered' 
+      });
+      return;
+    }
+
+    if (order.status === 'delivered') {
+      res.status(400).json({ 
+        success: false,
+        message: 'Order is already marked as delivered' 
+      });
+      return;
+    }
+
+    // Update order status to delivered
+    order.status = 'delivered';
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Order marked as delivered successfully',
+      order: order
+    });
+
+  } catch (error) {
+    console.error('Error marking order as delivered:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while marking order as delivered' 
+    });
+  }
+};
+
+// Cancel order
+export const cancelOrder = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orderId, reason } = req.body;
+
+    // Validate order ID
+    if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+      res.status(400).json({ 
+        success: false,
+        message: 'Invalid order ID' 
+      });
+      return;
+    }
+
+    // Find the order
+    const order = await Order.findById(orderId)
+      .populate('user', 'name phone email cashback')
+      .populate('address')
+      .populate('products.product', 'name price images');
+
+    if (!order) {
+      res.status(404).json({ 
+        success: false,
+        message: 'Order not found' 
+      });
+      return;
+    }
+
+    // Check if order can be cancelled
+    if (order.status === 'delivered') {
+      res.status(400).json({ 
+        success: false,
+        message: 'Cannot cancel a delivered order' 
+      });
+      return;
+    }
+
+    if (order.status === 'cancelled') {
+      res.status(400).json({ 
+        success: false,
+        message: 'Order is already cancelled' 
+      });
+      return;
+    }
+
+    // Refund cashback to user if it was used
+    if (order.cashback > 0) {
+      const user = await User.findById(order.user._id);
+      if (user) {
+        user.cashback = Number(user.cashback) + Number(order.cashback);
+        await user.save();
+      }
+    }
+
+    // Decrement coupon usage count if a coupon was used
+    if (order.coupon && order.coupon.couponId) {
+      await Coupon.findByIdAndUpdate(order.coupon.couponId, {
+        $inc: { usedCount: -1 }
+      });
+    }
+
+    // Update order status to cancelled
+    order.status = 'cancelled';
+    if (reason) {
+      order.notes = `${order.notes ? order.notes + ' | ' : ''}Cancellation reason: ${reason}`;
+    }
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Order cancelled successfully',
+      order: order,
+      refundedCashback: order.cashback > 0 ? order.cashback : 0
+    });
+
+  } catch (error) {
+    console.error('Error cancelling order:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while cancelling order' 
+    });
+  }
+};
+
+// Get order status history (optional but useful)
+export const updateOrderStatusWithTracking = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { orderId, status, note } = req.body;
+
+    // Validate order ID
+    if (!orderId || !mongoose.Types.ObjectId.isValid(orderId)) {
+      res.status(400).json({ 
+        success: false,
+        message: 'Invalid order ID' 
+      });
+      return;
+    }
+
+    const validStatuses = ['pending', 'processing', 'confirmed', 'shipped', 'delivered', 'cancelled'];
+    
+    if (!status || !validStatuses.includes(status)) {
+      res.status(400).json({ 
+        success: false,
+        message: 'Invalid status. Valid statuses: ' + validStatuses.join(', ')
+      });
+      return;
+    }
+
+    const order = await Order.findById(orderId);
+    
+    if (!order) {
+      res.status(404).json({ 
+        success: false,
+        message: 'Order not found' 
+      });
+      return;
+    }
+
+    // Update status
+    order.status = status;
+    if (note) {
+      order.notes = `${order.notes ? order.notes + ' | ' : ''}${note}`;
+    }
+    
+    await order.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Order status updated to ${status}`,
+      order: order
+    });
+
+  } catch (error) {
+    console.error('Error updating order status:', error);
+    res.status(500).json({ 
+      success: false,
+      message: 'Server error while updating order status' 
+    });
+  }
+};

@@ -21,7 +21,7 @@ import {
 import { verifyToken } from '../middlewares/auth';
 import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems, increaseCartItemQuantity, decreaseCartItemQuantity, emptyCart} from '../controllers/cartController';
 // import { createRazorpayOrder,verifyPayment } from '../controllers/paymentController';
-import { createOrder,deleteOrder,getAllOrders,getOrderById,getUserOrders, getUserRecentOrders} from '../controllers/orderController';
+import { cancelOrder, createOrder,deleteOrder,getAllOrders,getOrderById,getUserOrders, getUserRecentOrders, markOrderDelivered, updateOrderStatusWithTracking} from '../controllers/orderController';
 import { createRazorpayOrder, verifyPayment, distributeCommissionsManual, deductUserBalance } from '../controllers/paymentController';
 // import { authenticate } from '../middlewares/authentication';
     import { addBankDetail, getBankDetails, updateBankDetail, deleteBankDetail, setDefaultAccount } from '../controllers/userBankController';
@@ -141,6 +141,11 @@ router.get('/get-user-orders/:userId', verifyToken, getUserOrders);
 router.get('/get-user-recent-orders/:userId', verifyToken, getUserRecentOrders);
 router.get('/get-all-orders', getAllOrders);
 router.post('/delete-order', deleteOrder);
+
+// Order status management routes
+router.post('/orders/mark-delivered', markOrderDelivered);
+router.post('/orders/cancel', cancelOrder);
+router.post('/orders/update-status', updateOrderStatusWithTracking);
 // router.post('/update-order-status', verifyToken, updateOrderStatus);
 
 router.post('/create-razorpay-order', verifyToken, createRazorpayOrder);

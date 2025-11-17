@@ -133,7 +133,7 @@ export const applyCoupon = async (req: Request, res: Response): Promise<void> =>
     // Calculate cart total
     const cartTotal = cart.items.reduce((total: number, item: any) => 
       total + (item.price * item.quantity), 0);
-
+    let lowestPricedItem:any = null;
     // Find the active coupon
     const coupon = await Coupon.findOne({
       code: code.toUpperCase(),
@@ -170,8 +170,31 @@ export const applyCoupon = async (req: Request, res: Response): Promise<void> =>
     // Calculate discount
     let discountAmount = 0;
     
-    // If the coupon is applicable to specific products
-    if (coupon.products && coupon.products.length > 0) {
+    // Handle B1G1 (Buy One Get One) discount type
+    if (coupon.discountType === 'b1g1') {
+      // Calculate total items in cart (sum of all quantities)
+      const totalItems = cart.items.reduce((total: number, item: any) => 
+        total + item.quantity, 0);
+      
+      // B1G1 requires at least 2 items in cart
+      if (totalItems < 2) {
+        res.status(400).json({
+          success: false,
+          message: 'B1G1 offer requires at least 2 items in cart',
+        });
+        return;
+      }
+      
+      // Find the lowest priced single item in cart
+      lowestPricedItem = cart.items.reduce((min: any, item: any) => 
+        item.price < min.price ? item : min
+      );
+      
+      // Set discount amount to the lowest priced item
+      discountAmount = lowestPricedItem.price;
+      
+    } else if (coupon.products && coupon.products.length > 0) {
+      // If the coupon is applicable to specific products
       // Filter cart items that have products eligible for the coupon
       const eligibleProductIds = coupon.products.map(p => p._id.toString());
       const eligibleCartItems = cart.items.filter((item: any) => 
@@ -214,9 +237,15 @@ export const applyCoupon = async (req: Request, res: Response): Promise<void> =>
     discountAmount = Math.round(discountAmount * 100) / 100;
     const finalAmount = cartTotal - discountAmount;
 
+    // Prepare success message based on coupon type
+    let successMessage = 'Coupon applied successfully';
+    if (coupon.discountType === 'b1g1') {
+      successMessage = 'B1G1 offer applied - Lowest priced item free!';
+    }
+
     res.status(200).json({
       success: true,
-      message: 'Coupon applied successfully',
+      message: successMessage,
       coupon: {
         code: coupon.code,
         discountType: coupon.discountType,
@@ -225,6 +254,7 @@ export const applyCoupon = async (req: Request, res: Response): Promise<void> =>
       cartTotal: cartTotal,
       discount: discountAmount,
       finalAmount: finalAmount,
+      lowestPricedItem: coupon.discountType === 'b1g1' ? lowestPricedItem : null,
       cartItems: cart.items.map((item: any) => ({
         productId: item.product._id,
         productName: item.product.name,
