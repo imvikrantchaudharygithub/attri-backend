@@ -199,7 +199,7 @@ router.post('/print-manifest', printManifest);
 router.post('/admin/create-coupon', createCoupon); // Create a new coupon
 router.get('/admin/get-coupons', getCoupons); // Get all coupons
 router.put('/admin/update-coupon/:id', updateCoupon); // Update a coupon
-router.post('/admin/delete-coupon/:id', deleteCoupon); // Delete a coupon
+router.post('/admin/delete-coupon', deleteCoupon); // Delete a coupon
 
 // Client-facing coupon routes
 router.get('/coupon/:code', getCouponByCode); // Get coupon by code (public)

@@ -309,9 +309,9 @@ export const updateCoupon = async (req: Request, res: Response): Promise<void> =
 // Delete a coupon
 export const deleteCoupon = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { id } = req.params;
+    const { id } = req.body;
     const deletedCoupon = await Coupon.findByIdAndDelete(id);
-    
+    console.log(id,deletedCoupon,'deletedCoupon');
     if (!deletedCoupon) {
       res.status(404).json({
         success: false,
