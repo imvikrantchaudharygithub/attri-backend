@@ -9,6 +9,7 @@ const ProductSchema: Schema = new Schema(
     mrp: { type: Number, required: true }, // Original price
     price: { type: Number, required: true }, // Selling price
     discount: { type: Number, default: 0 }, // Discount percentage or fixed amount
+    distributionamount: { type: Number, default: 0, min: 0 }, // Distribution amount for commission base
     stock: { type: Number, default: 0 }, // Stock count
     rating: { type: Number, default: 0 }, // Rating
     category: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductCategory', required: true }, // Reference to ProductCategory

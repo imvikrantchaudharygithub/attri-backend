@@ -51,6 +51,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
     // Validate products
     let totalAmount = 0;
+    let distributionamountTotal = 0;
     const productItems: IOrderProduct[] = [];
 
     for (const item of products as IOrderProduct[]) {
@@ -67,6 +68,7 @@ export const createOrder = async (req: Request, res: Response) => {
       });
 
       totalAmount += Number((product.price * item.quantity).toFixed(2));
+      distributionamountTotal += Number(product.distributionamount || 0) * Number(item.quantity || 0);
     }
 
     // Store original amount before any discounts
@@ -212,6 +214,7 @@ export const createOrder = async (req: Request, res: Response) => {
       products: productItems,
       totalAmount: Number(finalAmount.toFixed(2)),
       originalAmount: Number(originalAmount.toFixed(2)),
+      distributionamountTotal: Number(distributionamountTotal.toFixed(2)),
       notes: notes || '',
       status: 'pending',
       cashback: Number(cashback || 0),

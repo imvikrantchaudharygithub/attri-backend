@@ -12,6 +12,20 @@ import mongoose from 'mongoose';
 const calculatePrice = (mrp: number, discount: number): number => {
   return discount > 0 ? mrp - (mrp * discount) / 100 : mrp;
 };
+
+const normalizeDistributionAmount = (value: any): number | null => {
+  if (value === undefined || value === null || value === '') {
+    return 0;
+  }
+
+  const numericValue = Number(value);
+  if (!Number.isFinite(numericValue) || numericValue < 0) {
+    return null;
+  }
+
+  return numericValue;
+};
+
 type UploadFiles = {
     images?: Express.Multer.File[];
     gallery?: Express.Multer.File[];
@@ -19,7 +33,7 @@ type UploadFiles = {
 
 
 export const createProduct = async (req: Request, res: Response): Promise<void> => {
-    const { name,rating, description, mrp, discount, stock, category, status, gallery, faqs, ingredients, info, tags } = req.body;
+    const { name,rating, description, mrp, discount, stock, category, status, gallery, faqs, ingredients, info, tags, distributionamount } = req.body;
 
     // Parse gallery, faqs, and tags if they're strings
     const parsedGallery = typeof gallery === "string" ? JSON.parse(gallery) : [];
@@ -32,6 +46,12 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
     if (parsedFaqs && !Array.isArray(parsedFaqs)) {
         res.status(400).json({ message: "FAQs must be an array of {question, answer} objects" });
         return;
+    }
+
+    const normalizedDistributionAmount = normalizeDistributionAmount(distributionamount);
+    if (normalizedDistributionAmount === null) {
+      res.status(400).json({ message: "distributionamount must be a valid non-negative number" });
+      return;
     }
 
     console.log("🟢 Received Request:", req.body);
@@ -157,7 +177,8 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
             status,
             faqs: validatedFaqs,
             info: validatedInfo,
-            tags: parsedTags
+            tags: parsedTags,
+            distributionamount: normalizedDistributionAmount
         });
 
         const savedProduct = await newProduct.save();
@@ -391,7 +412,7 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
   const { id } = req.params;
   const { 
       name, rating, description, mrp, discount, stock, category, 
-      status, gallery, faqs, ingredients, info, tags, images
+      status, gallery, faqs, ingredients, info, tags, images, distributionamount
   } = req.body;
 
   // Parse complex fields
@@ -517,6 +538,14 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
       product.price = product.mrp - (product.mrp * (product.discount || 0)) / 100;
       if (stock !== undefined) product.stock = stock;
       if (status) product.status = status;
+      if (distributionamount !== undefined) {
+        const normalizedDistributionAmount = normalizeDistributionAmount(distributionamount);
+        if (normalizedDistributionAmount === null) {
+          res.status(400).json({ message: "distributionamount must be a valid non-negative number" });
+          return;
+        }
+        product.distributionamount = normalizedDistributionAmount;
+      }
       
       // Handle category update
       if (category && category !== product.category.toString()) {

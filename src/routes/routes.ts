@@ -29,6 +29,7 @@ import { withdrawalController } from '../controllers/withdrawalController';
 import { addWarehouse, getTrackingDetails, getShipmentDetails, manifestOrder, getCourierList } from '../controllers/deliveryController';
 import { addPickupAddress, generateManifest, shiprocketWebhook, trackOrderByOrderId, getcheckServiceability, assignAWB, generateLabel, generatePickup, printManifest } from '../controllers/shiprocketController';
 import { createCoupon, getCoupons, getCouponByCode, applyCoupon, updateCoupon, deleteCoupon } from '../controllers/couponController';
+import { getTeamTree } from '../controllers/teamTreeController';
 
 const router = express.Router();
 
@@ -50,6 +51,7 @@ router.get('/get-user-ancestor/:userId', getUserAncestors);
 router.get('/all-users', getAllUsers);
 router.get('/user/referral/:referralCode', getUserByReferralCode);
 router.post('/delete-user', deleteUser);
+router.get('/team-tree/:userId', getTeamTree);
 // product category
 const categoryUpload = multer({
     storage: multer.memoryStorage(),

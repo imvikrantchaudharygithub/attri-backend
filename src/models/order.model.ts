@@ -85,6 +85,11 @@ const orderSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  distributionamountTotal: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   notes: String
 }, {
   timestamps: true

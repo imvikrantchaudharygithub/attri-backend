@@ -154,7 +154,8 @@ console.log("payment",payment);
           });
           console.log( "verify payment user",user);
 
-        await distributeCommissions(user?.toObject(),updatedOrder.totalAmount);
+        // await distributeCommissions(user?.toObject(),updatedOrder.distributionamountTotal || 0);
+        await distributeCommissions(user?.toObject(),updatedOrder.distributionamountTotal || 0);
     //    const shipmentData = await createSingleOrderShipment(updatedOrder._id.toString());
         const shipmentData = await createShiprocketOrder(updatedOrder._id.toString());
         // const user:any = await User.findById(updatedOrder.user);
