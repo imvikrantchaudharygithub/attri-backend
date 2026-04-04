@@ -16,37 +16,43 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Update CORS configuration
-// In your backend code
-const allowedOrigins = [
+const allowedOrigins: (string | RegExp)[] = [
   'http://localhost:3000',
+  'http://localhost:3001',
   'http://172.20.10.5:3000',
-  'https://attri-frontend.vercel.app', // Add your frontend domain
-  /https:\/\/.*\.vercel\.app$/  // Allow all Vercel subdomains
+  'http://172.20.10.5:3001',
+  'https://attri-frontend.vercel.app',
+  'https://attriindustries.com',
+  'https://www.attriindustries.com',
+  /https:\/\/.*\.vercel\.app$/,
 ];
 
+if (process.env.FRONTEND_URL) {
+  allowedOrigins.push(process.env.FRONTEND_URL);
+}
+
+const isOriginAllowed = (origin: string): boolean =>
+  allowedOrigins.some((allowed) =>
+    allowed instanceof RegExp ? allowed.test(origin) : allowed === origin
+  );
+
 app.use((req, res, next) => {
-  const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001', 'http://172.20.10.5:3001'];
   const origin = req.headers.origin;
-  
-  if (origin && allowedOrigins.includes(origin)) {
+
+  if (origin && isOriginAllowed(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
   }
-  
+
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  
+
   if (req.method === 'OPTIONS') {
     res.sendStatus(204);
     return;
   }
-  // sasa 2
   next();
 });
-app.options('*', cors());
 
 // If using Express's built-in JSON parser (for Express 4.
 app.use(express.json({
