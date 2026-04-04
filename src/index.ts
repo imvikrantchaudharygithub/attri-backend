@@ -9,7 +9,6 @@ import path from 'path';
 import fs from 'fs';
 import { sendSMS } from './services/smsSevice';
 // import { createShiprocketOrder } from '../src/controllers/shiprocketController';
-// Load environment variables from .env file
 dotenv.config();
 
 // Initialize the Express app
@@ -72,15 +71,6 @@ if (fs.existsSync(staticPath)) {
   app.use(express.static(staticPath));
 }
 
-// Update the db connection with proper error handling
-try {
-  db();
-  console.log('Database connected successfully');
-} catch (error) {
-  console.error('Database connection error:', error);
-  // Continue server startup even if DB fails
-}
-
 // API Routes
 app.use('/api', router);
 
@@ -88,13 +78,15 @@ app.use('/api', router);
 app.get('/', (req: Request, res: Response) => {
   res.send('Hello, World!');
 });
-// sendSMS("+919520887693", 123456).then((response) => {
-//   console.log(response);
-// }).catch((error) => {
-//   console.log(error);
-// });
-// Start the server
-// createShiprocketOrder("68f0c6313f6c092752fbe119")
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+
+async function start(): Promise<void> {
+  await db();
+  app.listen(PORT, () => {
+    console.log(`Server is running on http://localhost:${PORT}`);
+  });
+}
+
+start().catch((err) => {
+  console.error('Failed to start server:', err);
+  process.exit(1);
 });

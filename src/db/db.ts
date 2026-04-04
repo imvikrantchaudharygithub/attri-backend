@@ -1,22 +1,51 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-dotenv.config();
+import path from 'path';
+import fs from 'fs';
+
+/** Load .env from project root (works with ts-node, dist/, and PM2 cwd quirks). */
+function loadEnv(): void {
+    const candidates = [
+        path.resolve(process.cwd(), '.env'),
+        path.join(__dirname, '../../.env'),
+        path.join(__dirname, '../../../.env'),
+    ];
+    for (const p of candidates) {
+        if (fs.existsSync(p)) {
+            dotenv.config({ path: p });
+            return;
+        }
+    }
+    dotenv.config();
+}
+
+loadEnv();
 
 const connectDB = async (): Promise<void> => {
+    const uri = process.env.MONGODB_URI?.trim();
+    if (!uri || (!uri.startsWith('mongodb://') && !uri.startsWith('mongodb+srv://'))) {
+        console.error(
+            'MONGODB_URI is missing or invalid. Set it in .env at the project root, e.g. mongodb+srv://user:pass@cluster/...'
+        );
+        process.exit(1);
+    }
+
     try {
-        await mongoose.connect(String(process?.env?.MONGODB_URI || ''), {
-            dbName: process.env.MONGODB_USERNAME ,
-            // useNewUrlParser: true,
-            // useUnifiedTopology: true,
-            serverSelectionTimeoutMS: 5000,  // 5 seconds
-            socketTimeoutMS: 45000,         // 45 seconds
+        const options: mongoose.ConnectOptions = {
+            serverSelectionTimeoutMS: 5000,
+            socketTimeoutMS: 45000,
             connectTimeoutMS: 30000,
-        });
-        console.log('MongoDB connected',process?.env?.MONGODB_URI);
+        };
+        const dbName = process.env.MONGODB_DB_NAME?.trim();
+        if (dbName) {
+            options.dbName = dbName;
+        }
+
+        await mongoose.connect(uri, options);
+        console.log('MongoDB connected');
     } catch (error) {
-        console.log(process?.env?.MONGODB_USERNAME,'===',process?.env?.MONGODB_URI)
-        console.error('Error connecting to MongoDB:', (error as Error).message );
-        process.exit(1); // Exit process with failure
+        console.error('Error connecting to MongoDB:', (error as Error).message);
+        process.exit(1);
     }
 };
 
