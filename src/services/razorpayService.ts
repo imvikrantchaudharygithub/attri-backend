@@ -2,29 +2,26 @@ import Razorpay from 'razorpay';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
 
-// Load environment variables first
 dotenv.config();
 
-interface RazorpayOrderParams {
-    amount: number;
-    currency: string;
-    receipt: string;
-    notes?: Record<string, string>;
-    payment_capture?: number;
-}
-
 class RazorpayService {
-    private instance: Razorpay;
+    private instance: Razorpay | null = null;
 
-    constructor() {
-        if (!process.env.RAZORPAY_KEY_ID || !process.env.RAZORPAY_KEY_SECRET) {
-            throw new Error('Razorpay credentials not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env');
+    private getClient(): Razorpay {
+        const keyId = process.env.RAZORPAY_KEY_ID;
+        const keySecret = process.env.RAZORPAY_KEY_SECRET;
+        if (!keyId || !keySecret) {
+            throw new Error(
+                'Razorpay credentials not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env'
+            );
         }
-
-        this.instance = new Razorpay({
-            key_id: process.env.RAZORPAY_KEY_ID,
-            key_secret: process.env.RAZORPAY_KEY_SECRET
-        });
+        if (!this.instance) {
+            this.instance = new Razorpay({
+                key_id: keyId,
+                key_secret: keySecret
+            });
+        }
+        return this.instance;
     }
 
     async createOrder(params: {
@@ -35,34 +32,36 @@ class RazorpayService {
         payment_capture?: number;
     }) {
         try {
-            return await this.instance.orders.create({
-				amount: Math.round(params.amount), // ensure integer paise
-				currency: params.currency,
-				receipt: params.receipt,
-				notes: params.notes,
-				payment_capture: true // Auto-capture payments
-			});
+            return await this.getClient().orders.create({
+                amount: Math.round(params.amount),
+                currency: params.currency,
+                receipt: params.receipt,
+                notes: params.notes,
+                payment_capture: true
+            });
         } catch (error: any) {
             console.error('Razorpay API Error:', error.error);
-            throw new Error(`Payment failed: ${error.error.description}`);
+            throw new Error(`Payment failed: ${error.error?.description ?? error.message}`);
         }
     }
 
     async verifyPayment(razorpayOrderId: string, razorpayPaymentId: string, razorpaySignature: string) {
         try {
-            // Validate input parameters
             if (!razorpayOrderId || !razorpayPaymentId || !razorpaySignature) {
                 throw new Error('Missing payment verification parameters');
             }
 
-            // Generate expected signature
+            const keySecret = process.env.RAZORPAY_KEY_SECRET;
+            if (!keySecret) {
+                throw new Error('Razorpay credentials not configured');
+            }
+
             const body = `${razorpayOrderId}|${razorpayPaymentId}`;
             const expectedSignature = crypto
-                .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
+                .createHmac('sha256', keySecret)
                 .update(body)
                 .digest('hex');
 
-            // Compare signatures safely
             const isValid = crypto.timingSafeEqual(
                 Buffer.from(expectedSignature),
                 Buffer.from(razorpaySignature)
@@ -72,31 +71,29 @@ class RazorpayService {
                 throw new Error('Invalid payment signature');
             }
 
-            // Verify payment status with Razorpay API
-            const payment = await this.instance.payments.fetch(razorpayPaymentId);
-            
+            const payment = await this.getClient().payments.fetch(razorpayPaymentId);
+
             if (payment.status !== 'captured') {
                 throw new Error(`Payment not captured - Status: ${payment.status}`);
             }
 
             return payment;
-
         } catch (error: any) {
             console.error('Payment Verification Error:', {
                 orderId: razorpayOrderId,
                 paymentId: razorpayPaymentId,
                 error: error.message
             });
-            
+
             throw new Error(`Payment verification failed: ${error.message}`);
         }
     }
 
     async capturePayment(paymentId: string, amount: number) {
         try {
-            return await this.instance.payments.capture(
+            return await this.getClient().payments.capture(
                 paymentId,
-                amount * 100, // Convert to paise
+                amount * 100,
                 'INR'
             );
         } catch (error) {
@@ -104,11 +101,9 @@ class RazorpayService {
         }
     }
 
-    // Helper method for currency conversion
     inrToPaise(amount: number) {
         return amount * 100;
     }
 }
 
-// Export singleton after ensuring env vars are loaded
-export const razorpayService = new RazorpayService(); 
+export const razorpayService = new RazorpayService();
