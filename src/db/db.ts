@@ -1,10 +1,6 @@
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import { stringifyCookie } from 'next/dist/compiled/@edge-runtime/cookies';
 dotenv.config();
-
-
-const password: string = encodeURIComponent("c7BKetcLLhDpLujC");
 
 const connectDB = async (): Promise<void> => {
     try {

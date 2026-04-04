@@ -90,6 +90,12 @@ const orderSchema = new mongoose.Schema({
     default: 0,
     min: 0
   },
+  razorpay_order_id: {
+    type: String,
+    default: null,
+    unique: true,
+    sparse: true
+  },
   notes: String
 }, {
   timestamps: true

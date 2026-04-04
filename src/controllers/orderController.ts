@@ -204,8 +204,8 @@ export const createOrder = async (req: Request, res: Response) => {
       }
     }
 
-    // Calculate final amount after discounts
-    const finalAmount = Math.max(0, totalAmount - couponDiscount - (cashback || 0));
+    // Calculate final amount after discounts (round to 2 decimals to avoid floating-point drift)
+    const finalAmount = Number(Math.max(0, totalAmount - couponDiscount - (cashback || 0)).toFixed(2));
 // console.log("finalAmount",finalAmount);
     // Create order
     const newOrder = new Order({

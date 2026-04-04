@@ -22,7 +22,7 @@ import { verifyToken } from '../middlewares/auth';
 import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems, increaseCartItemQuantity, decreaseCartItemQuantity, emptyCart} from '../controllers/cartController';
 // import { createRazorpayOrder,verifyPayment } from '../controllers/paymentController';
 import { cancelOrder, createOrder,deleteOrder,getAllOrders,getOrderById,getUserOrders, getUserRecentOrders, markOrderDelivered, updateOrderStatusWithTracking} from '../controllers/orderController';
-import { createRazorpayOrder, verifyPayment, distributeCommissionsManual, deductUserBalance } from '../controllers/paymentController';
+import { createRazorpayOrder, verifyPayment, distributeCommissionsManual, deductUserBalance, razorpayWebhook } from '../controllers/paymentController';
 // import { authenticate } from '../middlewares/authentication';
     import { addBankDetail, getBankDetails, updateBankDetail, deleteBankDetail, setDefaultAccount } from '../controllers/userBankController';
 import { withdrawalController } from '../controllers/withdrawalController';
@@ -152,6 +152,7 @@ router.post('/orders/update-status', updateOrderStatusWithTracking);
 
 router.post('/create-razorpay-order', verifyToken, createRazorpayOrder);
 router.post('/verify-payment', verifyToken, verifyPayment);
+router.post('/razorpay-webhook', razorpayWebhook);
 
 
 // user bank routes

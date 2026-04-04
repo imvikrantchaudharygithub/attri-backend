@@ -175,8 +175,8 @@ class ShiprocketService {
 
   async login(): Promise<void> {
     const { data } = await this.authClient.post<ShiprocketAuthResponse>('/auth/login', {
-      email: process.env.SHIPROCKET_EMAIL || 'vikrantchaudhary1703@gmail.com',
-      password: process.env.SHIPROCKET_PASSWORD || 'imJoker@1703'
+      email: process.env.SHIPROCKET_EMAIL,
+      password: process.env.SHIPROCKET_PASSWORD
     });
     this.token = data.token;
     this.tokenExpiry = new Date(Date.now() + data.expires_in * 10000);

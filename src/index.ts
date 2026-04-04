@@ -49,7 +49,15 @@ app.use((req, res, next) => {
 app.options('*', cors());
 
 // If using Express's built-in JSON parser (for Express 4.
-app.use(express.json({ limit: "50mb" }));
+app.use(express.json({
+  limit: "50mb",
+  verify: (req: any, _res, buf) => {
+    // Preserve raw body for webhook signature verification
+    if (req.originalUrl?.includes('/razorpay-webhook')) {
+      req.rawBody = buf;
+    }
+  }
+}));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 // Serve static files (optional)

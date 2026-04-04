@@ -1,7 +1,7 @@
 import axios from 'axios';
 export const sendSMS = async (contactNumber: string, message: number) => {
 
-    const API_KEY = '1Cvkoh6iClZqNhWwA14gJ3bytqAzWQXh8OFm2ANCmh4XJRePMkpkvnsKjop0';
+    const API_KEY = process.env.FAST2SMS_API_KEY;
 
     if (!API_KEY) {
         throw new Error('Blank Fast2SMS API Key');

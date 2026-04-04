@@ -29,8 +29,10 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
         }
         
         const shippingAmount = order.totalAmount > 699 ? 0 : 55;
+        // Use toFixed(2) before converting to paise to avoid floating-point drift
+        // e.g. 99.5 → "99.50" → 9950 (instead of 99.5 * 100 which could give 9949.999...)
         const payable = Math.max(0, Number(order.totalAmount) + Number(shippingAmount));
-        const amountInPaise = Math.round(payable * 100);
+        const amountInPaise = Math.round(Number(payable.toFixed(2)) * 100);
         console.log("payable",payable);
         console.log("order",order);
 		// Create Razorpay order
@@ -43,6 +45,11 @@ export const createRazorpayOrder = async (req: Request, res: Response): Promise<
 			}
 		});
       
+
+        // Store razorpay_order_id on the order for webhook lookup
+        await Order.findByIdAndUpdate(orderId, {
+            razorpay_order_id: razorpayOrder.id
+        });
 
         res.status(200).json({
             id: razorpayOrder.id,
@@ -108,9 +115,10 @@ export const verifyPayment = async (req: Request, res: Response): Promise<void> 
             razorpay_signature
         );
 console.log("payment",payment);
-        // Update order status
-        const updatedOrder = await Order.findByIdAndUpdate(
-            orderId,
+        // Atomic check-and-update: only process if order is still "pending"
+        // This prevents double-processing if webhook fires simultaneously
+        const updatedOrder = await Order.findOneAndUpdate(
+            { _id: orderId, status: 'pending' },
             {
                 'payment.status': 'completed',
                 'payment.transactionId': razorpay_payment_id,
@@ -121,6 +129,13 @@ console.log("payment",payment);
         );
 
         if (!updatedOrder) {
+            // Either order not found OR already processed (by webhook) - both are OK
+            const existingOrder = await Order.findById(orderId);
+            if (existingOrder && existingOrder.status !== 'pending') {
+                // Already processed by webhook - return success to frontend
+                res.status(200).json({ message: 'Payment already verified', order: existingOrder });
+                return;
+            }
             res.status(404).json({ message: 'Order not found' });
             return;
         }
@@ -264,6 +279,127 @@ export const deductUserBalance = async (req: Request, res: Response): Promise<vo
             message: 'Failed to deduct balance',
             error: error.message
         });
+    }
+};
+
+
+// Razorpay Webhook - Safety net for payments where frontend callback fails
+export const razorpayWebhook = async (req: Request, res: Response): Promise<void> => {
+    try {
+        // Verify webhook signature
+        const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
+        if (!webhookSecret || webhookSecret.trim() === '') {
+            console.error('RAZORPAY_WEBHOOK_SECRET not configured');
+            res.status(500).json({ message: 'Webhook secret not configured' });
+            return;
+        }
+
+        const receivedSignature = req.headers['x-razorpay-signature'] as string;
+        if (!receivedSignature) {
+            res.status(400).json({ message: 'Missing webhook signature' });
+            return;
+        }
+
+        // Use raw body buffer for signature verification (preserved by express.json verify callback)
+        const rawBody = (req as any).rawBody;
+        const expectedSignature = crypto
+            .createHmac('sha256', webhookSecret)
+            .update(rawBody || JSON.stringify(req.body))
+            .digest('hex');
+
+        const isValid = crypto.timingSafeEqual(
+            Buffer.from(expectedSignature),
+            Buffer.from(receivedSignature)
+        );
+
+        if (!isValid) {
+            console.error('Razorpay webhook signature verification failed');
+            res.status(400).json({ message: 'Invalid webhook signature' });
+            return;
+        }
+
+        const event = req.body.event;
+        const payload = req.body.payload;
+
+        if (event === 'payment.captured') {
+            const razorpayPaymentId = payload.payment.entity.id;
+            const razorpayOrderId = payload.payment.entity.order_id;
+
+            // Find the order by razorpay_order_id
+            const order = await Order.findOne({ razorpay_order_id: razorpayOrderId });
+
+            if (!order) {
+                console.error(`Webhook: No order found for razorpay_order_id: ${razorpayOrderId}`);
+                res.status(200).json({ message: 'Order not found, acknowledged' });
+                return;
+            }
+
+            // Idempotent: skip if already processed
+            if (order.status !== 'pending') {
+                console.log(`Webhook: Order ${order._id} already processed (status: ${order.status}), skipping`);
+                res.status(200).json({ message: 'Already processed' });
+                return;
+            }
+
+            // Process the order (same logic as verifyPayment)
+            console.log(`Webhook: Processing payment for order ${order._id}`);
+
+            await Order.findByIdAndUpdate(order._id, {
+                'payment.status': 'completed',
+                'payment.transactionId': razorpayPaymentId,
+                'payment.verifiedAt': new Date(),
+                status: 'processing'
+            });
+
+            // Clear user's cart
+            await Cart.findOneAndUpdate(
+                { userId: order.user },
+                { $set: { items: [] } }
+            );
+
+            // Distribute commissions (background - don't block webhook response)
+            const user: any = await User.findById(order.user).populate({
+                path: "referral_by",
+                populate: {
+                    path: "referral_by",
+                    populate: {
+                        path: "referral_by",
+                        populate: {
+                            path: "referral_by",
+                            populate: {
+                                path: "referral_by",
+                                populate: {
+                                    path: "referral_by",
+                                    populate: {
+                                        path: "referral_by",
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            });
+
+            if (user) {
+                await distributeCommissions(user.toObject(), order.distributionamountTotal || 0);
+                await createShiprocketOrder(order._id.toString());
+
+                if (Number(user.cashback) > 0) {
+                    user.cashback = Number(user.cashback) - Number(order.cashback);
+                    await user.save();
+                }
+            }
+
+            console.log(`Webhook: Successfully processed order ${order._id}`);
+        }
+
+        // Always respond 200 to acknowledge receipt (Razorpay retries on non-2xx)
+        res.status(200).json({ message: 'Webhook processed' });
+
+    } catch (error: any) {
+        console.error('Razorpay Webhook Error:', error);
+        // Still respond 200 to prevent infinite retries for unrecoverable errors
+        res.status(200).json({ message: 'Webhook error acknowledged' });
     }
 };
 
