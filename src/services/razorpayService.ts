@@ -73,7 +73,7 @@ class RazorpayService {
 
             const payment = await this.getClient().payments.fetch(razorpayPaymentId);
 
-            if (payment.status !== 'captured') {
+            if (payment.status !== 'captured' && payment.status !== 'authorized') {
                 throw new Error(`Payment not captured - Status: ${payment.status}`);
             }
 

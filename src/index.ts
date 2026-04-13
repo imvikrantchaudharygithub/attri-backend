@@ -18,6 +18,7 @@ const PORT = process.env.PORT || 3000;
 const allowedOrigins: (string | RegExp)[] = [
   'http://localhost:3000',
   'http://localhost:3001',
+  'http://localhost:4200',
   'http://172.20.10.5:3000',
   'http://172.20.10.5:3001',
   'https://attri-frontend.vercel.app',
