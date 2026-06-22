@@ -619,3 +619,69 @@ const uploadBase64ToCloudinary = (base64: string, folder: string): Promise<any> 
       );
   });
 };
+
+// ---- Cart recommendations (mirrors recommended-user pattern) ----
+
+// Mark a product as recommended (cart carousel)
+export const setProductAsRecommended = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { productId } = req.body;
+    if (!productId) {
+      res.status(400).json({ message: 'Product ID is required' });
+      return;
+    }
+    const product = await Product.findByIdAndUpdate(
+      productId,
+      { isRecommended: true },
+      { new: true }
+    );
+    if (!product) {
+      res.status(404).json({ message: 'Product not found' });
+      return;
+    }
+    res.status(200).json({ message: 'Product set as recommended successfully', product });
+  } catch (error: any) {
+    console.error('Error setting product as recommended:', error);
+    res.status(500).json({ message: 'Failed to set product as recommended', error: error.message });
+  }
+};
+
+// Remove a product from recommended
+export const removeProductFromRecommended = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { productId } = req.body;
+    if (!productId) {
+      res.status(400).json({ message: 'Product ID is required' });
+      return;
+    }
+    const product = await Product.findByIdAndUpdate(
+      productId,
+      { isRecommended: false },
+      { new: true }
+    );
+    if (!product) {
+      res.status(404).json({ message: 'Product not found' });
+      return;
+    }
+    res.status(200).json({ message: 'Product removed from recommended successfully', product });
+  } catch (error: any) {
+    console.error('Error removing product from recommended:', error);
+    res.status(500).json({ message: 'Failed to remove product from recommended', error: error.message });
+  }
+};
+
+// Get all recommended products (public — used by the cart carousel)
+export const getRecommendedProducts = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const products = await Product.find({ isRecommended: true, status: 'active' })
+      .populate('category', 'name');
+    res.status(200).json({
+      message: 'Recommended products retrieved successfully',
+      count: products.length,
+      products
+    });
+  } catch (error: any) {
+    console.error('Error fetching recommended products:', error);
+    res.status(500).json({ message: 'Failed to fetch recommended products', error: error.message });
+  }
+};

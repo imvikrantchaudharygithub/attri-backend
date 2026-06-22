@@ -3,7 +3,7 @@ import upload from "../middlewares/uploads";
 
 import {loginWithOTP,verifyAndAddUser ,getUserById,getUserAncestors,getAllUsers,getUserByReferralCode, verifyLoginOtp, getUserByToken, deleteUser, setUserAsRecommended, removeUserFromRecommended, getRecommendedUsers} from '../controllers/userController';
 import { createProductCategory,  getAllProductCategories,  updateProductCategory,  deleteProductCategory, getProductCategoryBySlug,} from '../controllers/productCategoryController';
-import {  createProduct, getAllProducts, updateProduct, deleteProduct,buyProduct, getProductBySlug, searchProducts} from '../controllers/productController';
+import {  createProduct, getAllProducts, updateProduct, deleteProduct,buyProduct, getProductBySlug, searchProducts, setProductAsRecommended, removeProductFromRecommended, getRecommendedProducts} from '../controllers/productController';
 import {getPurchaseHistory} from '../controllers/purchaseHistoryController'
 import{getHomedata} from '../controllers/homeController'
 import { uploadBanner, getBanners, deleteBanner } from '../controllers/bannerController';
@@ -22,7 +22,7 @@ import { verifyToken } from '../middlewares/auth';
 import { addToCart, getCart, deleteCartItem ,updateCartItem, addBulkCartItems, increaseCartItemQuantity, decreaseCartItemQuantity, emptyCart} from '../controllers/cartController';
 // import { createRazorpayOrder,verifyPayment } from '../controllers/paymentController';
 import { cancelOrder, createOrder,deleteOrder,getAllOrders,getOrderById,getUserOrders, getUserRecentOrders, markOrderDelivered, updateOrderStatusWithTracking} from '../controllers/orderController';
-import { createRazorpayOrder, verifyPayment, distributeCommissionsManual, deductUserBalance, razorpayWebhook } from '../controllers/paymentController';
+import { createRazorpayOrder, verifyPayment, distributeCommissionsManual, distributeProductCommission, deductUserBalance, razorpayWebhook } from '../controllers/paymentController';
 // import { authenticate } from '../middlewares/authentication';
     import { addBankDetail, getBankDetails, updateBankDetail, deleteBankDetail, setDefaultAccount } from '../controllers/userBankController';
 import { withdrawalController } from '../controllers/withdrawalController';
@@ -98,6 +98,11 @@ router.get("/purchase-history", getPurchaseHistory);
 const searchProductsHandler: RequestHandler = searchProducts;
 
 router.post("/search-products", searchProductsHandler);
+
+// Cart recommended products (admin toggles the flag; cart reads the list)
+router.post('/set-product-recommended', setProductAsRecommended);
+router.post('/remove-product-recommended', removeProductFromRecommended);
+router.get('/recommended-products', getRecommendedProducts);
 
 // upload banner 
 router.post("/upload-banner", upload.fields([{ name: "image", maxCount: 1 }, { name: "mob_image", maxCount: 1 }]), uploadBanner);
@@ -176,6 +181,7 @@ router.get('/recommended-users', getRecommendedUsers);
 
 // Add to your existing routes
 router.post('/distribute-commissions-manual', distributeCommissionsManual);
+router.post('/distribute-product-commission', distributeProductCommission);
 router.post('/deduct-user-balance', deductUserBalance);
 
 // delivery routes

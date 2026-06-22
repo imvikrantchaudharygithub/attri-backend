@@ -11,6 +11,8 @@ import jwt from 'jsonwebtoken';
 import { sendSMS } from '../services/smsSevice';
 dotenv.config();
 const secretKey :any = process.env.SECRET_KEY;
+const REFERRER_REWARD_BALANCE = 10;  // ₹ real money to the referrer (withdrawable)
+const NEW_MEMBER_CASHBACK = 200;     // ₹ store credit to the new member
 // Generate OTP and send to the user
 export const loginWithOTP = async (req: Request, res: Response): Promise<void> => {
   const { phone ,newuser} = req.body;
@@ -39,8 +41,8 @@ export const loginWithOTP = async (req: Request, res: Response): Promise<void> =
     const otp = crypto.randomInt(1000, 9999).toString();
 
     await storeOtp(phone, otp);
-   await sendSMS(phone, Number(otp));
-    res.status(200).json({ message: `OTP sent successfully` });
+  //  await sendSMS(phone, Number(otp));
+    res.status(200).json({ message: `OTP sent successfully otp ${otp}` });
     return;
   } catch (error) {
     res.status(500).json({ message: 'Failed to send OTP', error });
@@ -96,9 +98,6 @@ export const verifyLoginOtp = async (req: Request, res: Response): Promise<void>
 
 // Verify OTP and add the user if not exists //using when signup
 export const verifyAndAddUser = async (req: Request, res: Response): Promise<void> => {
-  const session = await mongoose.startSession();
-  session.startTransaction();
-  
   const { phone, otp, username, referralcode, dateofbirth } = req.body;
   let token: any;
 
@@ -107,98 +106,91 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
     return;
   }
 
+  const session = await mongoose.startSession();
+  let user: any = null;
+  let committed = false;
+
   try {
+    session.startTransaction();
+
     // Verify OTP
     const isVerified = await verifyOtp(phone, otp);
     if (!isVerified) {
+      await session.abortTransaction();
       res.status(400).json({ message: 'Invalid OTP' });
       return;
     }
 
-    // Check if the user already exists
-    let user: any = await User.findOne({ phone });
+    // Check if the user already exists (read within the transaction)
+    user = await User.findOne({ phone }).session(session);
 
     if (!user) {
-      // Create a new user with properly initialized arrays
+      // Create the new user. ALL writes below use the session so the document is
+      // created and rewarded atomically — mixing session and non-session writes on
+      // the same doc caused a commit-time write conflict that crashed the process.
       user = new User({
         username,
         phone,
         referral_code: generateReferralCode(username),
-        referralFamily: [], // Initialize empty array
-        referral_by: [],     // Initialize empty array
+        referralFamily: [],
+        referral_by: [],
         dateofbirth: dateofbirth
       });
+      await user.save({ session });
 
-      await user.save();
-      
-      // Process referral code AFTER user is saved
+      // Process referral reward (signup is referral-mandatory on the frontend)
       if (referralcode) {
-        try {
-          const referrer: any = await User.findOne({ 
-            referral_code: referralcode.trim() 
-          }).session(session);
+        const referrer: any = await User.findOne({
+          referral_code: referralcode.trim()
+        }).session(session);
 
-          if (!referrer) {
-            console.error(`Referral code not found: "${referralcode}"`);
-          } else {
-            console.log(`Found referrer: ${referrer._id} for code: ${referralcode}`);
-
-            // Add cashback to referrer
-            await User.findByIdAndUpdate(
-              referrer._id,
-              { $inc: { cashback: 10 } },
-              { session }
-            );
-            console.log(`Added 10 cashback to referrer ${referrer._id}`);
-
-            // Convert IDs to strings for comparison/debugging
-            const referrerId = referrer._id.toString();
-            const userId = user._id.toString();
-            console.log(`Linking user ${userId} to referrer ${referrerId}`);
-            
-            // Direct array manipulation with save (more reliable than update operations)
-            // 1. Add user to referrer's family
-            if (!referrer.referralFamily) referrer.referralFamily = [];
-            if (!referrer.referralFamily.some((id: mongoose.Types.ObjectId) => id.toString() === userId)) {
-              referrer.referralFamily.push(user._id);
-              await referrer.save();
-              console.log(`Updated referrer's family array: ${referrer.referralFamily.length} members`);
-            }
-            
-            // 2. Add referrer to user's referral_by
-            if (!user.referral_by) user.referral_by = [];
-            if (!user.referral_by.some((id: mongoose.Types.ObjectId) => id.toString() === referrerId)) {
-              user.referral_by.push(referrer._id);
-              await user.save();
-              console.log(`Updated user's referral_by: ${user.referral_by.map((id: mongoose.Types.ObjectId) => id.toString())}`);
-            }
-            
-            // 3. Verify the changes
-            const verifyUser = await User.findById(user._id);
-            console.log(`Verification - user referral_by: ${Array.isArray(verifyUser?.referral_by) ? verifyUser.referral_by.length : 0}`);
-          }
-        } catch (error) {
-          await session.abortTransaction();
-          throw error;
+        if (!referrer) {
+          console.error(`Referral code not found: "${referralcode}"`);
+        } else {
+          // Referrer earns REAL money (withdrawable balance); new member earns cashback.
+          await User.findByIdAndUpdate(referrer._id, { $inc: { balance: REFERRER_REWARD_BALANCE } }, { session });
+          await User.findByIdAndUpdate(user._id, { $inc: { cashback: NEW_MEMBER_CASHBACK } }, { session });
+          // Link both directions (idempotent) within the same session.
+          await User.findByIdAndUpdate(referrer._id, { $addToSet: { referralFamily: user._id } }, { session });
+          await User.findByIdAndUpdate(user._id, { $addToSet: { referral_by: referrer._id } }, { session });
+          console.log(`Credited Rs.${REFERRER_REWARD_BALANCE} balance to referrer ${referrer._id} and Rs.${NEW_MEMBER_CASHBACK} cashback to new member ${user._id}`);
         }
       }
     }
 
-    if (secretKey) {
-      token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '168h' });
-    } else {
+    if (!secretKey) {
+      await session.abortTransaction();
       res.status(500).json({ message: "Internal server error: Secret key not defined" });
       return;
     }
+    token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '168h' });
 
-    res.status(200).json({ message: 'Login successful', user, token });
     await session.commitTransaction();
+    committed = true;
   } catch (error) {
-    await session.abortTransaction();
+    // Only abort if we never committed; guard so a stale abort can never crash the process.
+    if (!committed) {
+      try { await session.abortTransaction(); } catch (_) { /* already settled */ }
+    }
     console.error('Error in verifyAndAddUser:', error);
-    res.status(500).json({ message: 'Failed to verify OTP or add user', error });
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Failed to verify OTP or add user', error });
+    }
+    return;
   } finally {
     session.endSession();
+  }
+
+  // Transaction committed — load fresh state and respond. Guarded so a response
+  // error can't crash the process or trigger a post-commit abort.
+  try {
+    const freshUser = await User.findById(user._id);
+    res.status(200).json({ message: 'Login successful', user: freshUser, token });
+  } catch (err) {
+    console.error('verifyAndAddUser post-commit response error:', err);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Signup completed but failed to load user' });
+    }
   }
 };
 

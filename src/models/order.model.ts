@@ -44,6 +44,10 @@ const orderSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  cashbackEarned: {
+    type: Number,
+    default: 0
+  },
   coupon: {
     code: {
       type: String,

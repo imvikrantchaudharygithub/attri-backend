@@ -206,6 +206,13 @@ export const createOrder = async (req: Request, res: Response) => {
 
     // Calculate final amount after discounts (round to 2 decimals to avoid floating-point drift)
     const finalAmount = Number(Math.max(0, totalAmount - couponDiscount - (cashback || 0)).toFixed(2));
+
+    // 10% cashback (store credit) on orders with subtotal >= ₹299, computed on the amount actually paid.
+    const CASHBACK_THRESHOLD = 299;
+    const CASHBACK_PERCENT = 10;
+    const cashbackEarned = originalAmount >= CASHBACK_THRESHOLD
+      ? Math.round((CASHBACK_PERCENT / 100) * finalAmount)
+      : 0;
 // console.log("finalAmount",finalAmount);
     // Create order
     const newOrder = new Order({
@@ -218,6 +225,7 @@ export const createOrder = async (req: Request, res: Response) => {
       notes: notes || '',
       status: 'pending',
       cashback: Number(cashback || 0),
+      cashbackEarned: Number(cashbackEarned),
       coupon: {
         code: appliedCoupon ? appliedCoupon.code : null,
         discountAmount: Number(couponDiscount.toFixed(2)),
@@ -241,6 +249,7 @@ export const createOrder = async (req: Request, res: Response) => {
         originalAmount: originalAmount,
         couponDiscount: couponDiscount,
         cashbackUsed: cashback || 0,
+        cashbackEarned: cashbackEarned,
         finalAmount: finalAmount
       }
     });
@@ -529,11 +538,11 @@ export const cancelOrder = async (req: Request, res: Response): Promise<void> =>
       return;
     }
 
-    // Refund cashback to user if it was used
-    if (order.cashback > 0) {
+    // Refund spent cashback and reverse the earned 10% reward (net, clamped >= 0)
+    if (order.cashback > 0 || Number(order.cashbackEarned || 0) > 0) {
       const user = await User.findById(order.user._id);
       if (user) {
-        user.cashback = Number(user.cashback) + Number(order.cashback);
+        user.cashback = Math.max(0, Number(user.cashback) + Number(order.cashback) - Number(order.cashbackEarned || 0));
         await user.save();
       }
     }

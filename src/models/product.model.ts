@@ -15,6 +15,7 @@ const ProductSchema: Schema = new Schema(
     category: { type: mongoose.Schema.Types.ObjectId, ref: 'ProductCategory', required: true }, // Reference to ProductCategory
     images: { type: [String]}, // Image URL or path
     status: { type: String, enum: ['active', 'inactive'], default: 'active' }, // Status of the product
+    isRecommended: { type: Boolean, default: false }, // Show in cart recommendations carousel
     tags: { type: [String], default: [] }, // Tags of the product
     gallery: [
         {

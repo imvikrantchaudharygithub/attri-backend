@@ -4,6 +4,7 @@ import Order from '../models/order.model';
 import Cart from '../models/cart.model';
 import crypto from 'crypto';
 import User from '../models/user.model';
+import Product from '../models/product.model';
 import { distributeCommissions } from '../services/priceDistribution';
 // import { createSingleOrderShipment } from '../controllers/deliveryController';
 import { createShiprocketOrder } from '../controllers/shiprocketController';
@@ -174,9 +175,10 @@ console.log("payment",payment);
     //    const shipmentData = await createSingleOrderShipment(updatedOrder._id.toString());
         const shipmentData = await createShiprocketOrder(updatedOrder._id.toString());
         // const user:any = await User.findById(updatedOrder.user);
-        if(Number(user.cashback) > 0){
-            user.cashback = Number(user.cashback) - Number(updatedOrder.cashback);
-
+        // Deduct spent cashback and credit earned 10% cashback (runs once — atomic status flip guards it)
+        const cashbackNet = Number(updatedOrder.cashbackEarned || 0) - Number(updatedOrder.cashback || 0);
+        if (cashbackNet !== 0) {
+            user.cashback = Math.max(0, Number(user.cashback) + cashbackNet);
             await user.save();
         }
         res.status(200).json({
@@ -196,6 +198,142 @@ console.log("payment",payment);
     }
 }; 
 
+
+/** 7-level referral_by populate chain (same shape as verifyPayment / distributeCommissionsManual) */
+const populateReferralChain = {
+    path: 'referral_by' as const,
+    populate: {
+        path: 'referral_by',
+        populate: {
+            path: 'referral_by',
+            populate: {
+                path: 'referral_by',
+                populate: {
+                    path: 'referral_by',
+                    populate: {
+                        path: 'referral_by',
+                        populate: {
+                            path: 'referral_by',
+                        },
+                    },
+                },
+            },
+        },
+    },
+};
+
+/**
+ * Admin: distribute commissions as if the user bought the selected products
+ * (sum of distributionamount × quantity per line, same rule as createOrder).
+ * Body: { userId, items: [{ productId, quantity }] } or legacy { userId, productIds } (qty 1 each).
+ */
+export const distributeProductCommission = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const body = req.body as {
+            userId?: string;
+            items?: Array<{ productId?: string; quantity?: unknown }>;
+            productIds?: unknown;
+        };
+        const { userId } = body;
+
+        if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+            res.status(400).json({ message: 'Valid userId is required' });
+            return;
+        }
+
+        const qtyByProductId = new Map<string, number>();
+
+        if (Array.isArray(body.items) && body.items.length > 0) {
+            for (const row of body.items) {
+                const pid = String(row.productId ?? '').trim();
+                if (!mongoose.Types.ObjectId.isValid(pid)) {
+                    res.status(400).json({ message: `Invalid productId: ${pid || '(empty)'}` });
+                    return;
+                }
+                const q = Math.floor(Number(row.quantity));
+                if (!Number.isFinite(q) || q < 1 || q > 9999) {
+                    res.status(400).json({
+                        message: 'Each quantity must be a whole number from 1 to 9999',
+                    });
+                    return;
+                }
+                qtyByProductId.set(pid, (qtyByProductId.get(pid) || 0) + q);
+            }
+        } else if (Array.isArray(body.productIds) && body.productIds.length > 0) {
+            const ids = [
+                ...new Set(
+                    body.productIds
+                        .map((id) => String(id))
+                        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+                ),
+            ];
+            for (const id of ids) {
+                qtyByProductId.set(id, 1);
+            }
+        } else {
+            res.status(400).json({
+                message: 'Provide items [{ productId, quantity }] or legacy productIds[]',
+            });
+            return;
+        }
+
+        const uniqueIds = [...qtyByProductId.keys()];
+        if (uniqueIds.length === 0) {
+            res.status(400).json({ message: 'No valid product IDs provided' });
+            return;
+        }
+
+        const products = await Product.find({ _id: { $in: uniqueIds } });
+        if (products.length === 0) {
+            res.status(404).json({ message: 'No valid products found' });
+            return;
+        }
+
+        if (products.length !== uniqueIds.length) {
+            res.status(400).json({
+                message: 'Some product IDs were not found',
+                requested: uniqueIds.length,
+                found: products.length,
+            });
+            return;
+        }
+
+        const totalAmount = products.reduce((sum, p) => {
+            const qty = qtyByProductId.get(String(p._id)) || 0;
+            return sum + Number(p.distributionamount || 0) * qty;
+        }, 0);
+
+        if (totalAmount <= 0) {
+            res.status(400).json({
+                message: 'Total distribution amount for selected lines is zero',
+            });
+            return;
+        }
+
+        const user: any = await User.findById(userId).populate(populateReferralChain);
+        if (!user) {
+            res.status(404).json({ message: 'User not found' });
+            return;
+        }
+
+        await distributeCommissions(user.toObject(), totalAmount);
+
+        const totalUnits = [...qtyByProductId.values()].reduce((a, b) => a + b, 0);
+
+        res.status(200).json({
+            message: 'Distribution successful',
+            totalAmount,
+            productCount: products.length,
+            totalUnits,
+        });
+    } catch (error: any) {
+        console.error('distributeProductCommission error:', error);
+        res.status(400).json({
+            message: 'Distribution failed',
+            error: error.message,
+        });
+    }
+};
 
 export const distributeCommissionsManual = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -380,8 +518,9 @@ export const razorpayWebhook = async (req: Request, res: Response): Promise<void
                 await distributeCommissions(user.toObject(), updatedOrder.distributionamountTotal || 0);
                 await createShiprocketOrder(updatedOrder._id.toString());
 
-                if (Number(user.cashback) > 0) {
-                    user.cashback = Number(user.cashback) - Number(updatedOrder.cashback);
+                const cashbackNet = Number(updatedOrder.cashbackEarned || 0) - Number(updatedOrder.cashback || 0);
+                if (cashbackNet !== 0) {
+                    user.cashback = Math.max(0, Number(user.cashback) + cashbackNet);
                     await user.save();
                 }
             }
