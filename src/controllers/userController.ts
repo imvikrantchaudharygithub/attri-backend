@@ -9,6 +9,8 @@ import cloudinary from '../config/cloudinary';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import { sendSMS } from '../services/smsSevice';
+import { isOtpLoginEnabled, MAX_PASSWORD_SET_SKIPS } from '../config/authConfig';
+import { hashPassword, validatePassword } from '../services/passwordService';
 dotenv.config();
 const secretKey :any = process.env.SECRET_KEY;
 const REFERRER_REWARD_BALANCE = 10;  // ₹ real money to the referrer (withdrawable)
@@ -71,26 +73,37 @@ export const verifyLoginOtp = async (req: Request, res: Response): Promise<void>
       return;
     }
 
-    // Find the user
-    const user = await User.findOne({ phone });
-    
+    // +password so hasPassword can be computed; the response below uses a
+    // re-read document so the hash never reaches the client.
+    const user: any = await User.findOne({ phone }).select('+password');
+
     if (!user) {
       res.status(404).json({ message: 'User not found. Please signup first' });
       return;
     }
-    if (secretKey) {
-      token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '168h' });
-     } else {
-         res.status(500).json({ message: "Internal server error: Secret key not defined" });
-     }
+
+    if (!secretKey) {
+      // Previously this sent a 500 and then fell through to send a 200 as
+      // well, crashing on ERR_HTTP_HEADERS_SENT.
+      res.status(500).json({ message: "Internal server error: Secret key not defined" });
+      return;
+    }
+    token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '168h' });
+
+    const hasPassword = Boolean(user.password);
+    const safeUser = await User.findById(user._id);
 
     // Login successful
-    res.status(200).json({ 
-      message: 'Login successful', 
-      user ,
-      token
+    res.status(200).json({
+      message: 'Login successful',
+      user: safeUser,
+      token,
+      // Drives the soft gate: the frontend shows the "set a password" step
+      // instead of closing the modal.
+      passwordSetRequired: !hasPassword,
+      skipsRemaining: Math.max(0, MAX_PASSWORD_SET_SKIPS - (user.passwordSetSkips || 0)),
     });
-    
+
   } catch (error) {
     console.error('Error verifying login OTP:', error);
     res.status(500).json({ message: 'Failed to verify OTP', error });
