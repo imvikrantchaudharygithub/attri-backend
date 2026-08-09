@@ -5,7 +5,7 @@ import argon2 from 'argon2';
  * iterations, 1 degree of parallelism). Do not lower these — the cost is what
  * makes an offline crack of a stolen hash dump impractical.
  */
-const ARGON_OPTIONS: argon2.Options = {
+const ARGON_OPTIONS: argon2.HashOptions = {
     type: argon2.argon2id,
     memoryCost: 19456, // 19 MiB
     timeCost: 2,
@@ -21,13 +21,9 @@ export const MAX_PASSWORD_LENGTH = 128;
  * ~0ms while a genuine verify takes ~50ms, which is enough of a signal to
  * enumerate accounts by clock alone.
  */
-let dummyHash: Promise<string> | null = null;
-const getDummyHash = (): Promise<string> => {
-    if (!dummyHash) {
-        dummyHash = argon2.hash('timing-equalisation-placeholder', ARGON_OPTIONS);
-    }
-    return dummyHash;
-};
+let dummyHash: Promise<string> | undefined;
+const getDummyHash = (): Promise<string> =>
+    (dummyHash ??= argon2.hash('timing-equalisation-placeholder', ARGON_OPTIONS));
 
 export const hashPassword = (plain: string): Promise<string> =>
     argon2.hash(plain, ARGON_OPTIONS);

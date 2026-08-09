@@ -9,7 +9,9 @@
     "build": "tsc",
     "dev": "nodemon --exec ts-node ./src/index.ts",
     "check:phones": "ts-node ./src/scripts/checkDuplicatePhones.ts",
-    "migrate:phone-index": "ts-node ./src/scripts/addPhoneUniqueIndex.ts"
+    "migrate:phone-index": "ts-node ./src/scripts/addPhoneUniqueIndex.ts",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run typecheck && npm test"
   },
   "keywords": [],
   "author": "",
