@@ -273,6 +273,80 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
     }
   };
 
+/**
+ * POST /api/admin/set-user-password
+ *
+ * Support-desk reset: an admin chooses a password on the user's behalf. There
+ * is no way to read an existing one back — the stored value is an argon2id
+ * hash — so "recover a password" here always means "replace it with a known
+ * one" and tell the user what it is.
+ *
+ * Deliberately not routed through authController.setPassword. That controller
+ * demands a password_set OTP whenever a password already exists, which is
+ * exactly the condition this path has to bypass; threading an admin escape
+ * hatch through it would put a bypass branch inside the user-facing auth path.
+ */
+export const adminSetUserPassword = async (req: Request, res: Response): Promise<void> => {
+  const { userId, password } = req.body;
+
+  if (!userId) {
+    res.status(400).json({ message: 'userId is required' });
+    return;
+  }
+
+  // Same service the signup and self-serve paths use, so admin-set passwords
+  // can never drift to a weaker policy than user-set ones.
+  const policyError = validatePassword(password);
+  if (policyError) {
+    res.status(400).json({ message: policyError });
+    return;
+  }
+
+  try {
+    // findByIdAndUpdate throws a CastError on a non-ObjectId, which would
+    // surface as a 500. A bad id is a missing user.
+    if (!mongoose.Types.ObjectId.isValid(String(userId))) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    const passwordSetAt = new Date();
+
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      {
+        // The lockout fields are cleared alongside the new hash: the commonest
+        // support call is a user locked out by five bad attempts, and leaving
+        // lockedUntil in the future would 423 their very next login and make
+        // the reset look broken.
+        $set: {
+          password: await hashPassword(String(password)),
+          passwordSetAt,
+          failedLoginCount: 0,
+        },
+        // Evicts every other device. verifyToken compares a token's `tv` claim
+        // against this, so outstanding JWTs die on their next request — the
+        // right behaviour when the reset reason is a shared or compromised
+        // account.
+        $inc: { tokenVersion: 1 },
+        $unset: { lockedUntil: 1 },
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Neither the plaintext nor the hash goes back over the wire.
+    res.status(200).json({ message: 'Password set', passwordSetAt });
+  } catch (error) {
+    console.error('adminSetUserPassword error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
 const getAncestors = async (userId: string): Promise<any> => {
     const user = await User.findById(userId).lean();
   

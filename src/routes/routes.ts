@@ -1,7 +1,7 @@
 import express, { Request, Response, RequestHandler } from 'express';
 import upload from "../middlewares/uploads";
 
-import {loginWithOTP,verifyAndAddUser ,getUserById,getUserAncestors,getAllUsers,getUserByReferralCode, verifyLoginOtp, getUserByToken, deleteUser, setUserAsRecommended, removeUserFromRecommended, getRecommendedUsers} from '../controllers/userController';
+import {loginWithOTP,verifyAndAddUser ,getUserById,getUserAncestors,getAllUsers,getUserByReferralCode, verifyLoginOtp, getUserByToken, deleteUser, setUserAsRecommended, removeUserFromRecommended, getRecommendedUsers, adminSetUserPassword} from '../controllers/userController';
 import { createProductCategory,  getAllProductCategories,  updateProductCategory,  deleteProductCategory, getProductCategoryBySlug,} from '../controllers/productCategoryController';
 import {  createProduct, getAllProducts, updateProduct, deleteProduct,buyProduct, getProductBySlug, searchProducts, setProductAsRecommended, removeProductFromRecommended, getRecommendedProducts} from '../controllers/productController';
 import {getPurchaseHistory} from '../controllers/purchaseHistoryController'
@@ -60,6 +60,9 @@ router.get('/get-user-ancestor/:userId', getUserAncestors);
 router.get('/all-users', getAllUsers);
 router.get('/user/referral/:referralCode', getUserByReferralCode);
 router.post('/delete-user', deleteUser);
+// Admin support-desk password reset. Intentionally unauthenticated, matching
+// the other admin endpoints — see §9 of the design spec.
+router.post('/admin/set-user-password', adminSetUserPassword);
 router.get('/team-tree/:userId', getTeamTree);
 // product category
 const categoryUpload = multer({
