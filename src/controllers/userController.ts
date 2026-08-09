@@ -39,6 +39,13 @@ export const loginWithOTP = async (req: Request, res: Response): Promise<void> =
       }
     }
 
+    // Signup codes must keep flowing when OTP *login* is switched off: phone
+    // ownership still has to be proven at registration.
+    if (newuser !== true && !isOtpLoginEnabled()) {
+      res.status(403).json({ message: 'OTP login is disabled. Please use your password.' });
+      return;
+    }
+
     // Generate and send OTP (using your preferred service) 
     const otp = crypto.randomInt(1000, 9999).toString();
 
@@ -58,6 +65,13 @@ export const loginWithOTP = async (req: Request, res: Response): Promise<void> =
 export const verifyLoginOtp = async (req: Request, res: Response): Promise<void> => {
   let token:any;
   const { phone, otp } = req.body;
+
+  // The switch that ends OTP login once password adoption is high enough.
+  // Password reset and signup are deliberately unaffected.
+  if (!isOtpLoginEnabled()) {
+    res.status(403).json({ message: 'OTP login is disabled. Please use your password.' });
+    return;
+  }
 
   if (!phone || !otp) {
     res.status(400).json({ message: 'Phone and OTP are required' });
@@ -113,12 +127,23 @@ export const verifyLoginOtp = async (req: Request, res: Response): Promise<void>
 
 // Verify OTP and add the user if not exists //using when signup
 export const verifyAndAddUser = async (req: Request, res: Response): Promise<void> => {
-  const { phone, otp, username, referralcode, dateofbirth } = req.body;
+  const { phone, otp, username, referralcode, dateofbirth, password } = req.body;
   let token: any;
 
   if (!phone || !otp || !username) {
     res.status(400).json({ message: 'Phone, OTP, and username are required' });
     return;
+  }
+
+  // Optional in the API so a cached older app build keeps working rather than
+  // hard-failing on a live store; required by the signup form. Validated before
+  // the transaction opens so a rejected password never consumes the OTP.
+  if (password !== undefined) {
+    const policyError = validatePassword(password);
+    if (policyError) {
+      res.status(400).json({ message: policyError });
+      return;
+    }
   }
 
   const session = await mongoose.startSession();
@@ -149,7 +174,13 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
         referral_code: generateReferralCode(username),
         referralFamily: [],
         referral_by: [],
-        dateofbirth: dateofbirth
+        dateofbirth: dateofbirth,
+        // Hashed inside the same session, so account creation and referral
+        // rewards stay atomic. New accounts are born with a password, which is
+        // what stops the legacy pool growing.
+        ...(password
+          ? { password: await hashPassword(String(password)), passwordSetAt: new Date() }
+          : {}),
       });
       await user.save({ session });
 
