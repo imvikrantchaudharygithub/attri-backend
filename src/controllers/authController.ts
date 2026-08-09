@@ -22,8 +22,10 @@ const secretKey: string = process.env.SECRET_KEY as string;
  */
 const GENERIC_AUTH_ERROR = 'Invalid mobile number or password';
 
-const signToken = (userId: string): string =>
-    jwt.sign({ userId }, secretKey, { expiresIn: '168h' });
+/** `tv` is checked by verifyToken against the user's current tokenVersion, so a
+ *  password change invalidates every token minted before it. */
+const signToken = (userId: string, tokenVersion: number = 0): string =>
+    jwt.sign({ userId, tv: tokenVersion }, secretKey, { expiresIn: '168h' });
 
 const isLocked = (user: any): boolean =>
     Boolean(user.lockedUntil && user.lockedUntil.getTime() > Date.now());
@@ -81,7 +83,7 @@ export const loginWithPassword = async (req: Request, res: Response): Promise<vo
         res.status(200).json({
             message: 'Login successful',
             user: safeUser,
-            token: signToken(user._id.toString()),
+            token: signToken(user._id.toString(), user.tokenVersion || 0),
         });
     } catch (error) {
         console.error('loginWithPassword error:', error);
@@ -192,6 +194,11 @@ export const setPassword = async (req: Request, res: Response): Promise<void> =>
             }
         }
 
+        // Bumping the version evicts every other device. The caller gets a
+        // token carrying the new value, so the person who just changed the
+        // password stays logged in while everyone else is signed out.
+        const nextVersion = (user.tokenVersion || 0) + 1;
+
         await User.updateOne(
             { _id: user._id },
             {
@@ -200,6 +207,7 @@ export const setPassword = async (req: Request, res: Response): Promise<void> =>
                 // A successful reset is also the recovery path out of a lockout.
                 failedLoginCount: 0,
                 lockedUntil: null,
+                tokenVersion: nextVersion,
             }
         );
 
@@ -207,7 +215,7 @@ export const setPassword = async (req: Request, res: Response): Promise<void> =>
         res.status(200).json({
             message: 'Password saved',
             user: safeUser,
-            token: signToken(user._id.toString()),
+            token: signToken(user._id.toString(), nextVersion),
         });
     } catch (error) {
         console.error('setPassword error:', error);

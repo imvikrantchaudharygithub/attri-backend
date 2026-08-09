@@ -102,7 +102,11 @@ export const verifyLoginOtp = async (req: Request, res: Response): Promise<void>
       res.status(500).json({ message: "Internal server error: Secret key not defined" });
       return;
     }
-    token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '168h' });
+    token = jwt.sign(
+      { userId: user.id, tv: user.tokenVersion || 0 },
+      secretKey,
+      { expiresIn: '168h' }
+    );
 
     const hasPassword = Boolean(user.password);
     const safeUser = await User.findById(user._id);
@@ -209,7 +213,11 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
       res.status(500).json({ message: "Internal server error: Secret key not defined" });
       return;
     }
-    token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '168h' });
+    token = jwt.sign(
+      { userId: user.id, tv: user.tokenVersion || 0 },
+      secretKey,
+      { expiresIn: '168h' }
+    );
 
     await session.commitTransaction();
     committed = true;

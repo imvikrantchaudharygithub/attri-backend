@@ -20,6 +20,10 @@ const userSchema: Schema = new Schema({
     passwordSetSkips: { type: Number, default: 0 },
     failedLoginCount: { type: Number, default: 0 },
     lockedUntil: { type: Date },
+    /** Bumped on every password change. Tokens carry it as `tv`, so changing a
+     *  password evicts every other device — otherwise an attacker holding a
+     *  stolen 168h JWT keeps access to a wallet they can withdraw from. */
+    tokenVersion: { type: Number, default: 0 },
     referral_code: { type: String ,unique: true }, 
     referral_by: [{ type: Schema.Types.ObjectId, ref: 'User' }] , 
     balance:{type:Number, default:0},
