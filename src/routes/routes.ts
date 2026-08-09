@@ -30,6 +30,8 @@ import { addWarehouse, getTrackingDetails, getShipmentDetails, manifestOrder, ge
 import { addPickupAddress, generateManifest, shiprocketWebhook, trackOrderByOrderId, getcheckServiceability, assignAWB, generateLabel, generatePickup, printManifest } from '../controllers/shiprocketController';
 import { createCoupon, getCoupons, getCouponByCode, applyCoupon, updateCoupon, deleteCoupon } from '../controllers/couponController';
 import { getTeamTree } from '../controllers/teamTreeController';
+import { loginWithPassword, sendPasswordOtp, setPassword, skipPasswordSetup } from '../controllers/authController';
+import { loginLimiter, otpLimiter, otpHourlyLimiter } from '../middlewares/rateLimit';
 
 const router = express.Router();
 
@@ -37,11 +39,19 @@ const router = express.Router();
 router.get('/home-pagedata', getHomedata);
 
 
-router.post('/send-otp', loginWithOTP);
+// Rate limited: /send-otp was previously unthrottled, leaving the Fast2SMS
+// balance drainable on demand.
+router.post('/send-otp', otpHourlyLimiter, otpLimiter, loginWithOTP);
 //otp for login
 router.post('/verify-login-otp', verifyLoginOtp);
 //otp for signup
 router.post('/verify-otp', verifyAndAddUser);
+
+// Password auth
+router.post('/auth/login-password', loginLimiter, loginWithPassword);
+router.post('/auth/password/otp', otpHourlyLimiter, otpLimiter, sendPasswordOtp);
+router.post('/auth/password/set', setPassword);
+router.post('/auth/password/skip', verifyToken, skipPasswordSetup);
 
 router.get('/user/profile', getUserByToken);
 
