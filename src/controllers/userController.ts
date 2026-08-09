@@ -40,7 +40,9 @@ export const loginWithOTP = async (req: Request, res: Response): Promise<void> =
     // Generate and send OTP (using your preferred service) 
     const otp = crypto.randomInt(1000, 9999).toString();
 
-    await storeOtp(phone, otp);
+    // Scope the code to the journey it was issued for: a signup code must not
+    // be redeemable at login, nor a login code at password set.
+    await storeOtp(phone, otp, newuser === true ? 'signup' : 'login');
    await sendSMS(phone, Number(otp));
     res.status(200).json({ message: `OTP sent successfully` });
     return;
@@ -62,8 +64,8 @@ export const verifyLoginOtp = async (req: Request, res: Response): Promise<void>
 
   try {
     // Verify OTP
-    const isVerified = await verifyOtp(phone, otp);
-    
+    const isVerified = await verifyOtp(phone, otp, 'login');
+
     if (!isVerified) {
       res.status(400).json({ message: 'Invalid OTP' });
       return;
@@ -114,7 +116,7 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
     session.startTransaction();
 
     // Verify OTP
-    const isVerified = await verifyOtp(phone, otp);
+    const isVerified = await verifyOtp(phone, otp, 'signup');
     if (!isVerified) {
       await session.abortTransaction();
       res.status(400).json({ message: 'Invalid OTP' });
@@ -194,34 +196,10 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
   }
 };
 
-//using when login
-export const resetsendOtpController = async (req: Request, res: Response) => {
-  try {
-      const { phone } = req.body;
-      if (!phone) {
-          return res.status(400).json({ message: 'Phone number is required' });
-      }
-      const existingUser = await User.findOne({ phone });
-      if (!existingUser) {
-          res.status(400).json({ message: 'No Account Found' });
-          return;
-      }
-
-      // Generate a 6-digit OTP
-      const otp = crypto.randomInt(1000, 9999).toString();
-
-      // Store the OTP
-      storeOtp(phone, otp);
-
-    
-      // Respond to the client
-      res.status(200).json({ message: 'OTP sent successfully', otp });
-  } catch (error) {
-      console.error('Error sending OTP:', error);
-      res.status(500).json({ message: 'Internal server error' });
-  }
-};
-
+// Removed: resetsendOtpController. Its route was already commented out, it
+// returned the OTP in its own response body, and it leaked account existence
+// via "No Account Found". Password reset is handled by
+// POST /api/auth/password/otp + /api/auth/password/set.
 
 // Get all user
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {

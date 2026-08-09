@@ -43,7 +43,6 @@ router.post('/verify-login-otp', verifyLoginOtp);
 //otp for signup
 router.post('/verify-otp', verifyAndAddUser);
 
-// router.post('/resetsend-otp', resetsendOtpController);
 router.get('/user/profile', getUserByToken);
 
 router.get('/get-user/:userId', getUserById);
