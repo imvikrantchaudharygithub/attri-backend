@@ -65,6 +65,25 @@ describe('User model password fields', () => {
         expect(found.password).toBeUndefined();
     });
 
+    // Password login resolves an account by phone alone. A duplicate would make
+    // findOne({ phone }) non-deterministic and could authenticate the wrong
+    // account — including one holding a different wallet balance.
+    it('refuses a second user with the same phone', async () => {
+        await User.init(); // wait for the unique index to finish building
+        await makeUser();
+        await expect(makeUser()).rejects.toThrow(/duplicate key|E11000/i);
+    });
+
+    it('declares the phone index as unique', async () => {
+        await User.init();
+        const indexes: any[] = await User.collection.indexes();
+        const phoneIx = indexes.find(
+            (i) => i.key && i.key.phone === 1 && Object.keys(i.key).length === 1
+        );
+        expect(phoneIx).toBeDefined();
+        expect(phoneIx.unique).toBe(true);
+    });
+
     it('stores passwordSetAt when provided', async () => {
         const when = new Date('2026-08-09T00:00:00Z');
         await makeUser({ password: FAKE_HASH, passwordSetAt: when });

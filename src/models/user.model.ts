@@ -2,7 +2,10 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 const userSchema: Schema = new Schema({
     username: { type: String, required: true },
-    phone:{type:Number,required: true,},
+    /** Unique: password login resolves an account by phone alone, so a duplicate
+     *  would make findOne({ phone }) non-deterministic. Index is also created
+     *  explicitly by scripts/addPhoneUniqueIndex.ts. */
+    phone:{type:Number,required: true, unique: true},
     /**
      * argon2id hash. select:false keeps it out of every existing query —
      * getAllUsers, getUserByToken, verifyLoginOtp and the admin users table all
