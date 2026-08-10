@@ -342,7 +342,7 @@ export const adminSetUserPassword = async (req: Request, res: Response): Promise
     // Neither the plaintext nor the hash goes back over the wire.
     res.status(200).json({ message: 'Password set', passwordSetAt });
   } catch (error) {
-    console.error('adminSetUserPassword error:', error);
+    console.error('adminSetUserPassword error:', error instanceof Error ? error.message : error);
     res.status(500).json({ message: 'Internal server error' });
   }
 };
