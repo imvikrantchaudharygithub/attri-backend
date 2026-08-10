@@ -158,4 +158,42 @@ describe('POST /admin/set-user-password', () => {
         expect(body).not.toContain('replacementpass1');
         expect(body).not.toContain('$argon2');
     });
+
+    /**
+     * Regression for a defect browser QC found on 2026-08-10 that every unit
+     * test had missed: /user/profile carried no verifyToken, so it answered 200
+     * to a revoked token. tokenVersion was incrementing correctly and the
+     * storefront's My Account page carried on as if nothing had happened —
+     * the admin's "signs this user out of every device" was simply untrue.
+     */
+    it('revokes the user session for /user/profile, not just guarded routes', async () => {
+        const u: any = await makeUser();
+        const liveToken = jwt.sign(
+            { userId: u._id.toString(), tv: 0 },
+            process.env.SECRET_KEY as string
+        );
+        const profile = () => request(app).get('/api/user/profile')
+            .set('Authorization', `Bearer ${liveToken}`);
+
+        expect((await profile()).status).toBe(200);
+
+        await request(app).post(ENDPOINT)
+            .send({ userId: u._id.toString(), password: 'replacementpass1' });
+
+        expect((await profile()).status).toBe(401);
+    });
+
+    /** Same middleware gap: a deleted user used to get a 404 the client ignores. */
+    it('401s on /user/profile when the token holder no longer exists', async () => {
+        const u: any = await makeUser();
+        const token = jwt.sign(
+            { userId: u._id.toString(), tv: 0 },
+            process.env.SECRET_KEY as string
+        );
+        await User.deleteOne({ _id: u._id });
+
+        const res = await request(app).get('/api/user/profile')
+            .set('Authorization', `Bearer ${token}`);
+        expect(res.status).toBe(401);
+    });
 });

@@ -53,7 +53,12 @@ router.post('/auth/password/otp', otpHourlyLimiter, otpLimiter, sendPasswordOtp)
 router.post('/auth/password/set', setPassword);
 router.post('/auth/password/skip', verifyToken, skipPasswordSetup);
 
-router.get('/user/profile', getUserByToken);
+// verifyToken is what enforces tokenVersion. Without it this route accepted a
+// revoked token indefinitely: getUserByToken checks the JWT signature but not
+// the version, so a password change — including an admin reset — left the
+// owner's My Account page working as if nothing had happened. It also turns a
+// deleted user into a 401 the client can act on, rather than a 404 it ignores.
+router.get('/user/profile', verifyToken, getUserByToken);
 
 router.get('/get-user/:userId', getUserById);
 router.get('/get-user-ancestor/:userId', getUserAncestors);
