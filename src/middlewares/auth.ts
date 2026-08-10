@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt, { Secret } from 'jsonwebtoken';
+import User from '../models/user.model';
 
 interface AuthenticatedRequest extends Request {
     userId?: string | number;
@@ -45,10 +46,30 @@ export const verifyToken = (req: AuthenticatedRequest, res: Response, next: Next
                 return;
             }
             
-            // Log successful decoding
-            // console.log("Decoded token payload:", decoded);
-            req.userId = decoded.userId || decoded.id || decoded._id;
-            next();
+            const userId = decoded.userId || decoded.id || decoded._id;
+
+            // Tokens minted before the last password change are dead. Adds one
+            // indexed lookup per authenticated request — negligible at current
+            // volume, and the alternative is a stolen 168h token retaining
+            // access to a withdrawable wallet after the owner resets.
+            //
+            // `tv` is absent on tokens issued before this field existed; both
+            // sides coalesce to 0 so already-active sessions keep working.
+            User.findById(userId)
+                .select('tokenVersion')
+                .lean()
+                .then((user: any) => {
+                    if (!user || (user.tokenVersion || 0) !== (decoded.tv || 0)) {
+                        res.status(401).json({ message: "Session expired. Please log in again." });
+                        return;
+                    }
+                    req.userId = userId;
+                    next();
+                })
+                .catch((lookupError) => {
+                    console.error("Auth middleware lookup error:", lookupError);
+                    res.status(500).json({ message: "Authentication error" });
+                });
         });
     } catch (error) {
         console.error("Auth middleware unexpected error:", error);

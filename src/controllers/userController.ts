@@ -9,6 +9,8 @@ import cloudinary from '../config/cloudinary';
 import dotenv from 'dotenv';
 import jwt from 'jsonwebtoken';
 import { sendSMS } from '../services/smsSevice';
+import { isOtpLoginEnabled, MAX_PASSWORD_SET_SKIPS } from '../config/authConfig';
+import { hashPassword, validatePassword } from '../services/passwordService';
 dotenv.config();
 const secretKey :any = process.env.SECRET_KEY;
 const REFERRER_REWARD_BALANCE = 10;  // ₹ real money to the referrer (withdrawable)
@@ -37,10 +39,19 @@ export const loginWithOTP = async (req: Request, res: Response): Promise<void> =
       }
     }
 
+    // Signup codes must keep flowing when OTP *login* is switched off: phone
+    // ownership still has to be proven at registration.
+    if (newuser !== true && !isOtpLoginEnabled()) {
+      res.status(403).json({ message: 'OTP login is disabled. Please use your password.' });
+      return;
+    }
+
     // Generate and send OTP (using your preferred service) 
     const otp = crypto.randomInt(1000, 9999).toString();
 
-    await storeOtp(phone, otp);
+    // Scope the code to the journey it was issued for: a signup code must not
+    // be redeemable at login, nor a login code at password set.
+    await storeOtp(phone, otp, newuser === true ? 'signup' : 'login');
    await sendSMS(phone, Number(otp));
     res.status(200).json({ message: `OTP sent successfully` });
     return;
@@ -55,6 +66,13 @@ export const verifyLoginOtp = async (req: Request, res: Response): Promise<void>
   let token:any;
   const { phone, otp } = req.body;
 
+  // The switch that ends OTP login once password adoption is high enough.
+  // Password reset and signup are deliberately unaffected.
+  if (!isOtpLoginEnabled()) {
+    res.status(403).json({ message: 'OTP login is disabled. Please use your password.' });
+    return;
+  }
+
   if (!phone || !otp) {
     res.status(400).json({ message: 'Phone and OTP are required' });
     return;
@@ -62,33 +80,48 @@ export const verifyLoginOtp = async (req: Request, res: Response): Promise<void>
 
   try {
     // Verify OTP
-    const isVerified = await verifyOtp(phone, otp);
-    
+    const isVerified = await verifyOtp(phone, otp, 'login');
+
     if (!isVerified) {
       res.status(400).json({ message: 'Invalid OTP' });
       return;
     }
 
-    // Find the user
-    const user = await User.findOne({ phone });
-    
+    // +password so hasPassword can be computed; the response below uses a
+    // re-read document so the hash never reaches the client.
+    const user: any = await User.findOne({ phone }).select('+password');
+
     if (!user) {
       res.status(404).json({ message: 'User not found. Please signup first' });
       return;
     }
-    if (secretKey) {
-      token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '168h' });
-     } else {
-         res.status(500).json({ message: "Internal server error: Secret key not defined" });
-     }
+
+    if (!secretKey) {
+      // Previously this sent a 500 and then fell through to send a 200 as
+      // well, crashing on ERR_HTTP_HEADERS_SENT.
+      res.status(500).json({ message: "Internal server error: Secret key not defined" });
+      return;
+    }
+    token = jwt.sign(
+      { userId: user.id, tv: user.tokenVersion || 0 },
+      secretKey,
+      { expiresIn: '168h' }
+    );
+
+    const hasPassword = Boolean(user.password);
+    const safeUser = await User.findById(user._id);
 
     // Login successful
-    res.status(200).json({ 
-      message: 'Login successful', 
-      user ,
-      token
+    res.status(200).json({
+      message: 'Login successful',
+      user: safeUser,
+      token,
+      // Drives the soft gate: the frontend shows the "set a password" step
+      // instead of closing the modal.
+      passwordSetRequired: !hasPassword,
+      skipsRemaining: Math.max(0, MAX_PASSWORD_SET_SKIPS - (user.passwordSetSkips || 0)),
     });
-    
+
   } catch (error) {
     console.error('Error verifying login OTP:', error);
     res.status(500).json({ message: 'Failed to verify OTP', error });
@@ -98,12 +131,23 @@ export const verifyLoginOtp = async (req: Request, res: Response): Promise<void>
 
 // Verify OTP and add the user if not exists //using when signup
 export const verifyAndAddUser = async (req: Request, res: Response): Promise<void> => {
-  const { phone, otp, username, referralcode, dateofbirth } = req.body;
+  const { phone, otp, username, referralcode, dateofbirth, password } = req.body;
   let token: any;
 
   if (!phone || !otp || !username) {
     res.status(400).json({ message: 'Phone, OTP, and username are required' });
     return;
+  }
+
+  // Optional in the API so a cached older app build keeps working rather than
+  // hard-failing on a live store; required by the signup form. Validated before
+  // the transaction opens so a rejected password never consumes the OTP.
+  if (password !== undefined) {
+    const policyError = validatePassword(password);
+    if (policyError) {
+      res.status(400).json({ message: policyError });
+      return;
+    }
   }
 
   const session = await mongoose.startSession();
@@ -114,7 +158,7 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
     session.startTransaction();
 
     // Verify OTP
-    const isVerified = await verifyOtp(phone, otp);
+    const isVerified = await verifyOtp(phone, otp, 'signup');
     if (!isVerified) {
       await session.abortTransaction();
       res.status(400).json({ message: 'Invalid OTP' });
@@ -134,7 +178,13 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
         referral_code: generateReferralCode(username),
         referralFamily: [],
         referral_by: [],
-        dateofbirth: dateofbirth
+        dateofbirth: dateofbirth,
+        // Hashed inside the same session, so account creation and referral
+        // rewards stay atomic. New accounts are born with a password, which is
+        // what stops the legacy pool growing.
+        ...(password
+          ? { password: await hashPassword(String(password)), passwordSetAt: new Date() }
+          : {}),
       });
       await user.save({ session });
 
@@ -163,7 +213,11 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
       res.status(500).json({ message: "Internal server error: Secret key not defined" });
       return;
     }
-    token = jwt.sign({ userId: user.id }, secretKey, { expiresIn: '168h' });
+    token = jwt.sign(
+      { userId: user.id, tv: user.tokenVersion || 0 },
+      secretKey,
+      { expiresIn: '168h' }
+    );
 
     await session.commitTransaction();
     committed = true;
@@ -194,34 +248,10 @@ export const verifyAndAddUser = async (req: Request, res: Response): Promise<voi
   }
 };
 
-//using when login
-export const resetsendOtpController = async (req: Request, res: Response) => {
-  try {
-      const { phone } = req.body;
-      if (!phone) {
-          return res.status(400).json({ message: 'Phone number is required' });
-      }
-      const existingUser = await User.findOne({ phone });
-      if (!existingUser) {
-          res.status(400).json({ message: 'No Account Found' });
-          return;
-      }
-
-      // Generate a 6-digit OTP
-      const otp = crypto.randomInt(1000, 9999).toString();
-
-      // Store the OTP
-      storeOtp(phone, otp);
-
-    
-      // Respond to the client
-      res.status(200).json({ message: 'OTP sent successfully', otp });
-  } catch (error) {
-      console.error('Error sending OTP:', error);
-      res.status(500).json({ message: 'Internal server error' });
-  }
-};
-
+// Removed: resetsendOtpController. Its route was already commented out, it
+// returned the OTP in its own response body, and it leaked account existence
+// via "No Account Found". Password reset is handled by
+// POST /api/auth/password/otp + /api/auth/password/set.
 
 // Get all user
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
@@ -242,6 +272,80 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
       res.status(500).json({ message: 'Internal server error', error });
     }
   };
+
+/**
+ * POST /api/admin/set-user-password
+ *
+ * Support-desk reset: an admin chooses a password on the user's behalf. There
+ * is no way to read an existing one back — the stored value is an argon2id
+ * hash — so "recover a password" here always means "replace it with a known
+ * one" and tell the user what it is.
+ *
+ * Deliberately not routed through authController.setPassword. That controller
+ * demands a password_set OTP whenever a password already exists, which is
+ * exactly the condition this path has to bypass; threading an admin escape
+ * hatch through it would put a bypass branch inside the user-facing auth path.
+ */
+export const adminSetUserPassword = async (req: Request, res: Response): Promise<void> => {
+  const { userId, password } = req.body;
+
+  if (!userId) {
+    res.status(400).json({ message: 'userId is required' });
+    return;
+  }
+
+  // Same service the signup and self-serve paths use, so admin-set passwords
+  // can never drift to a weaker policy than user-set ones.
+  const policyError = validatePassword(password);
+  if (policyError) {
+    res.status(400).json({ message: policyError });
+    return;
+  }
+
+  try {
+    // findByIdAndUpdate throws a CastError on a non-ObjectId, which would
+    // surface as a 500. A bad id is a missing user.
+    if (!mongoose.Types.ObjectId.isValid(String(userId))) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    const passwordSetAt = new Date();
+
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      {
+        // The lockout fields are cleared alongside the new hash: the commonest
+        // support call is a user locked out by five bad attempts, and leaving
+        // lockedUntil in the future would 423 their very next login and make
+        // the reset look broken.
+        $set: {
+          password: await hashPassword(String(password)),
+          passwordSetAt,
+          failedLoginCount: 0,
+        },
+        // Evicts every other device. verifyToken compares a token's `tv` claim
+        // against this, so outstanding JWTs die on their next request — the
+        // right behaviour when the reset reason is a shared or compromised
+        // account.
+        $inc: { tokenVersion: 1 },
+        $unset: { lockedUntil: 1 },
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      res.status(404).json({ message: 'User not found' });
+      return;
+    }
+
+    // Neither the plaintext nor the hash goes back over the wire.
+    res.status(200).json({ message: 'Password set', passwordSetAt });
+  } catch (error) {
+    console.error('adminSetUserPassword error:', error instanceof Error ? error.message : error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
 
 const getAncestors = async (userId: string): Promise<any> => {
     const user = await User.findById(userId).lean();

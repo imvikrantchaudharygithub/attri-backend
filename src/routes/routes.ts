@@ -1,7 +1,7 @@
 import express, { Request, Response, RequestHandler } from 'express';
 import upload from "../middlewares/uploads";
 
-import {loginWithOTP,verifyAndAddUser ,getUserById,getUserAncestors,getAllUsers,getUserByReferralCode, verifyLoginOtp, getUserByToken, deleteUser, setUserAsRecommended, removeUserFromRecommended, getRecommendedUsers} from '../controllers/userController';
+import {loginWithOTP,verifyAndAddUser ,getUserById,getUserAncestors,getAllUsers,getUserByReferralCode, verifyLoginOtp, getUserByToken, deleteUser, setUserAsRecommended, removeUserFromRecommended, getRecommendedUsers, adminSetUserPassword} from '../controllers/userController';
 import { createProductCategory,  getAllProductCategories,  updateProductCategory,  deleteProductCategory, getProductCategoryBySlug,} from '../controllers/productCategoryController';
 import {  createProduct, getAllProducts, updateProduct, deleteProduct,buyProduct, getProductBySlug, searchProducts, setProductAsRecommended, removeProductFromRecommended, getRecommendedProducts} from '../controllers/productController';
 import {getPurchaseHistory} from '../controllers/purchaseHistoryController'
@@ -30,6 +30,8 @@ import { addWarehouse, getTrackingDetails, getShipmentDetails, manifestOrder, ge
 import { addPickupAddress, generateManifest, shiprocketWebhook, trackOrderByOrderId, getcheckServiceability, assignAWB, generateLabel, generatePickup, printManifest } from '../controllers/shiprocketController';
 import { createCoupon, getCoupons, getCouponByCode, applyCoupon, updateCoupon, deleteCoupon } from '../controllers/couponController';
 import { getTeamTree } from '../controllers/teamTreeController';
+import { loginWithPassword, sendPasswordOtp, setPassword, skipPasswordSetup } from '../controllers/authController';
+import { loginLimiter, otpLimiter, otpHourlyLimiter } from '../middlewares/rateLimit';
 
 const router = express.Router();
 
@@ -37,20 +39,35 @@ const router = express.Router();
 router.get('/home-pagedata', getHomedata);
 
 
-router.post('/send-otp', loginWithOTP);
+// Rate limited: /send-otp was previously unthrottled, leaving the Fast2SMS
+// balance drainable on demand.
+router.post('/send-otp', otpHourlyLimiter, otpLimiter, loginWithOTP);
 //otp for login
 router.post('/verify-login-otp', verifyLoginOtp);
 //otp for signup
 router.post('/verify-otp', verifyAndAddUser);
 
-// router.post('/resetsend-otp', resetsendOtpController);
-router.get('/user/profile', getUserByToken);
+// Password auth
+router.post('/auth/login-password', loginLimiter, loginWithPassword);
+router.post('/auth/password/otp', otpHourlyLimiter, otpLimiter, sendPasswordOtp);
+router.post('/auth/password/set', setPassword);
+router.post('/auth/password/skip', verifyToken, skipPasswordSetup);
+
+// verifyToken is what enforces tokenVersion. Without it this route accepted a
+// revoked token indefinitely: getUserByToken checks the JWT signature but not
+// the version, so a password change — including an admin reset — left the
+// owner's My Account page working as if nothing had happened. It also turns a
+// deleted user into a 401 the client can act on, rather than a 404 it ignores.
+router.get('/user/profile', verifyToken, getUserByToken);
 
 router.get('/get-user/:userId', getUserById);
 router.get('/get-user-ancestor/:userId', getUserAncestors);
 router.get('/all-users', getAllUsers);
 router.get('/user/referral/:referralCode', getUserByReferralCode);
 router.post('/delete-user', deleteUser);
+// Admin support-desk password reset. Intentionally unauthenticated, matching
+// the other admin endpoints — see §9 of the design spec.
+router.post('/admin/set-user-password', adminSetUserPassword);
 router.get('/team-tree/:userId', getTeamTree);
 // product category
 const categoryUpload = multer({

@@ -2,7 +2,28 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 const userSchema: Schema = new Schema({
     username: { type: String, required: true },
-    phone:{type:Number,required: true,},
+    /** Unique: password login resolves an account by phone alone, so a duplicate
+     *  would make findOne({ phone }) non-deterministic. Index is also created
+     *  explicitly by scripts/addPhoneUniqueIndex.ts. */
+    phone:{type:Number,required: true, unique: true},
+    /**
+     * argon2id hash. select:false keeps it out of every existing query —
+     * getAllUsers, getUserByToken, verifyLoginOtp and the admin users table all
+     * return user documents and none of them should ever see this. Only the
+     * password-login path opts back in with .select('+password').
+     * Absent = legacy user who has not set a password yet.
+     */
+    password: { type: String, select: false },
+    /** Not select:false — My Profile shows "Last changed" from this. */
+    passwordSetAt: { type: Date },
+    /** Soft-gate skip counter. Server-side so clearing localStorage can't reset it. */
+    passwordSetSkips: { type: Number, default: 0 },
+    failedLoginCount: { type: Number, default: 0 },
+    lockedUntil: { type: Date },
+    /** Bumped on every password change. Tokens carry it as `tv`, so changing a
+     *  password evicts every other device — otherwise an attacker holding a
+     *  stolen 168h JWT keeps access to a wallet they can withdraw from. */
+    tokenVersion: { type: Number, default: 0 },
     referral_code: { type: String ,unique: true }, 
     referral_by: [{ type: Schema.Types.ObjectId, ref: 'User' }] , 
     balance:{type:Number, default:0},
