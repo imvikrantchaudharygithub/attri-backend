@@ -18,8 +18,8 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
     "@types/jsonwebtoken": "^9.0.8",
-    "argon2": "^0.45.1",
     "axios": "^1.8.2",
     "cloudinary": "^1.41.3",
     "cors": "^2.8.5",

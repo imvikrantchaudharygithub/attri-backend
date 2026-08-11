@@ -1,12 +1,17 @@
-import argon2 from 'argon2';
+import { Algorithm, hash as argon2Hash, verify as argon2Verify, type Options } from '@node-rs/argon2';
 
 /**
  * OWASP Password Storage Cheat Sheet minimums for argon2id (19 MiB, 2
  * iterations, 1 degree of parallelism). Do not lower these — the cost is what
  * makes an offline crack of a stolen hash dump impractical.
+ *
+ * @node-rs/argon2 ships prebuilt binaries rather than compiling through
+ * node-gyp, so deploy hosts need no C toolchain. The output is the same
+ * standard argon2id PHC string, so hashes written by the old `argon2` package
+ * still verify.
  */
-const ARGON_OPTIONS: argon2.HashOptions = {
-    type: argon2.argon2id,
+const ARGON_OPTIONS: Options = {
+    algorithm: Algorithm.Argon2id,
     memoryCost: 19456, // 19 MiB
     timeCost: 2,
     parallelism: 1,
@@ -23,10 +28,10 @@ export const MAX_PASSWORD_LENGTH = 128;
  */
 let dummyHash: Promise<string> | undefined;
 const getDummyHash = (): Promise<string> =>
-    (dummyHash ??= argon2.hash('timing-equalisation-placeholder', ARGON_OPTIONS));
+    (dummyHash ??= argon2Hash('timing-equalisation-placeholder', ARGON_OPTIONS));
 
 export const hashPassword = (plain: string): Promise<string> =>
-    argon2.hash(plain, ARGON_OPTIONS);
+    argon2Hash(plain, ARGON_OPTIONS);
 
 /**
  * Returns false for every failure mode — wrong password, absent hash,
@@ -38,11 +43,11 @@ export const verifyPassword = async (
     plain: string
 ): Promise<boolean> => {
     if (!hash) {
-        await argon2.verify(await getDummyHash(), plain).catch(() => false);
+        await argon2Verify(await getDummyHash(), plain).catch(() => false);
         return false;
     }
     try {
-        return await argon2.verify(hash, plain);
+        return await argon2Verify(hash, plain);
     } catch {
         return false;
     }
